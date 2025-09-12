@@ -483,6 +483,115 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
 
       {analysisResult && !loading && (
         <>
+          {/* 基础统计概览 */}
+          {analysisResult.basic_stats_overview && (
+            <Card 
+              title={<><BarChartOutlined /> 基础数据概览</>}
+              style={{ marginBottom: 24 }}
+            >
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={8}>
+                  <Statistic 
+                    title="数据规模" 
+                    value={analysisResult.basic_stats_overview.data_scale.total_rows}
+                    suffix={`行 × ${analysisResult.basic_stats_overview.data_scale.total_columns}列`}
+                  />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Statistic 
+                    title="业务场景" 
+                    value={analysisResult.basic_stats_overview.data_scale.business_scenario}
+                  />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Statistic 
+                    title="数据质量" 
+                    value={analysisResult.basic_stats_overview.data_quality.missing_data_fields.length}
+                    suffix="个字段有缺失值"
+                    valueStyle={{ color: analysisResult.basic_stats_overview.data_quality.missing_data_fields.length > 0 ? '#cf1322' : '#3f8600' }}
+                  />
+                </Col>
+              </Row>
+              
+              {/* 字段基础统计 */}
+              <Divider orientation="left">字段统计</Divider>
+              <Row gutter={[16, 16]}>
+                {Object.entries(analysisResult.basic_stats_overview.field_summary).map(([field, stats]) => (
+                  <Col xs={24} sm={12} md={8} key={field}>
+                    <Card size="small" style={{ height: '100%' }}>
+                      <Statistic 
+                        title={field}
+                        value={stats.type === 'numeric' ? stats.mean : stats.unique_count}
+                        suffix={stats.type === 'numeric' ? '(均值)' : '(唯一值)'}
+                        precision={stats.type === 'numeric' ? 2 : 0}
+                      />
+                      <div style={{ fontSize: '12px', color: '#666', marginTop: 8 }}>
+                        <div>类型: {stats.type}</div>
+                        <div>非空: {stats.non_null_count}/{analysisResult.basic_stats_overview.data_scale.total_rows}</div>
+                        {stats.null_count > 0 && (
+                          <div style={{ color: '#cf1322' }}>缺失: {stats.null_percentage}%</div>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+
+              {/* TOP排名 */}
+              {Object.keys(analysisResult.basic_stats_overview.top_rankings).length > 0 && (
+                <>
+                  <Divider orientation="left">TOP排名</Divider>
+                  <Row gutter={[16, 16]}>
+                    {Object.entries(analysisResult.basic_stats_overview.top_rankings).map(([field, ranking]) => (
+                      <Col xs={24} sm={12} key={field}>
+                        <Card size="small" title={`${field} TOP5`}>
+                          <List
+                            size="small"
+                            dataSource={Object.entries(ranking.top_5)}
+                            renderItem={([value, count]) => (
+                              <List.Item>
+                                <Space>
+                                  <Text strong>{value}</Text>
+                                  <Text type="secondary">{count}次</Text>
+                                </Space>
+                              </List.Item>
+                            )}
+                          />
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                </>
+              )}
+
+              {/* 数据质量问题 */}
+              {analysisResult.basic_stats_overview.data_quality.potential_issues.length > 0 && (
+                <>
+                  <Divider orientation="left">数据质量提醒</Divider>
+                  <Alert
+                    message="发现潜在数据质量问题"
+                    description={
+                      <div>
+                        {analysisResult.basic_stats_overview.data_quality.potential_issues.map((issue, index) => (
+                          <div key={index} style={{ marginBottom: 8 }}>
+                            <Text strong>{issue.field}:</Text> {issue.issue}
+                            {issue.examples && issue.examples.length > 0 && (
+                              <div style={{ marginLeft: 16, fontSize: '12px', color: '#666' }}>
+                                例如: {issue.examples.map(ex => `${ex.base} ↔ ${ex.similar.join(', ')}`).join('; ')}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    }
+                    type="warning"
+                    showIcon
+                  />
+                </>
+              )}
+            </Card>
+          )}
+
           {/* 综合分析报告 */}
           <Card 
             title={<><FileTextOutlined /> 专业分析报告</>}
@@ -497,9 +606,9 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
               </Button>
             }
           >
-            {analysisResult.analysis_report ? (
+            {analysisResult.ai_insights ? (
               <div style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 16, borderRadius: 6 }}>
-                {analysisResult.analysis_report}
+                {analysisResult.ai_insights}
               </div>
             ) : (
               <div style={{ padding: 16, background: '#f0f2f5', borderRadius: 6 }}>
@@ -737,13 +846,43 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
             </div>
           )}
 
-          {/* 可视化图表 */}
+          {/* 可视化图表 - 嵌入到分析报告中 */}
           {analysisResult?.charts && analysisResult.charts.length > 0 && (
-            <Card title={<><BarChartOutlined /> 数据可视化</>} style={{ marginBottom: 24 }}>
+            <Card title={<><BarChartOutlined /> 数据可视化分析</>} style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 16 }}>
+                <Text type="secondary">
+                  以下图表直观展示了数据分析的关键发现，每个图表都对应分析报告中的具体洞察点：
+                </Text>
+              </div>
               <Row gutter={[16, 16]}>
                 {analysisResult.charts.map((chartData, index) => (
                   <Col xs={24} lg={12} key={index}>
-                    <ChartDisplay chartData={chartData} />
+                    <div style={{ 
+                      border: '1px solid #f0f0f0', 
+                      borderRadius: '8px', 
+                      padding: '16px',
+                      background: '#fafafa',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                          📈 {chartData.title}
+                        </Text>
+                      </div>
+                      <ChartDisplay chartData={chartData} />
+                      <div style={{ 
+                        marginTop: '12px', 
+                        padding: '8px 12px', 
+                        background: '#f6f6f6', 
+                        borderRadius: '4px',
+                        borderLeft: '4px solid #1890ff'
+                      }}>
+                        <Text type="secondary" style={{ fontSize: '13px' }}>
+                          <strong>图表解读：</strong>
+                          {chartData.subtitle || getChartInsight(chartData, analysisResult, index)}
+                        </Text>
+                      </div>
+                    </div>
                   </Col>
                 ))}
               </Row>

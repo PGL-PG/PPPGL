@@ -1,0 +1,24 @@
+# Excel数据分析助手 - Python依赖包
+
+# 核心数据处理
+pandas==2.1.1
+openpyxl==3.1.2
+numpy==1.24.3
+
+# Web框架
+Flask==2.3.3
+Flask-CORS==4.0.0
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# HTTP请求
+requests==2.31.0
+
+# Web服务
+Werkzeug==2.3.7
+
+# 数据验证
+pydantic==2.4.2
+
+# 文件处理
+python-multipart==0.0.6

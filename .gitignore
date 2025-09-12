@@ -46,9 +46,12 @@ frontend/dist/
 
 # Uploads and temporary files
 backend/uploads/
+uploads/
 *.xlsx
 *.xls
 *.csv
+*.tmp
+*.temp
 
 # OS generated files
 .DS_Store

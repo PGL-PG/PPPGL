@@ -55,45 +55,63 @@
 - "价格与销量呈负相关(-0.23)，降价可能提升销量"
 - "苹果品牌平均销量比市场均值高45.2%"
 
-## 安装和启动
+## 🚀 安装和启动
 
-### 方法一：使用自动化脚本（推荐）
+### 方法一：一键安装启动（推荐）
 
-1. **安装依赖包**
+1. **安装所有依赖**
    ```bash
    # 双击运行或在命令行执行
-   install_packages.bat
+   install.bat
    ```
 
-2. **测试依赖是否安装成功**
+2. **配置 API Key**
    ```bash
-   python test_dependencies.py
+   # 检查和配置 Gemini API Key
+   python check_api_key.py
    ```
+   
+   或者手动配置：
+   - 方式1：设置环境变量 `set GEMINI_API_KEY=您的API_KEY`
+   - 方式2：修改 `server_gemini.py` 文件中的 `API_KEY` 变量
+   - 方式3：复制 `.env.example` 为 `.env` 并填入API Key
 
-3. **启动应用**
+3. **启动系统（Excel助手优化版）**
    ```bash
    # 双击运行或在命令行执行
-   start.bat
+   start_excel_optimized.bat
    ```
 
-### 方法二：手动启动
+### 方法二：手动分步启动
 
-1. **安装后端依赖**
+1. **安装依赖**
    ```bash
-   cd backend
-   pip install pandas openpyxl numpy Flask Flask-CORS
-   ```
-
-2. **启动后端服务**
-   ```bash
-   cd backend
-   python app.py
-   ```
-
-3. **启动前端服务**
-   ```bash
+   # Python 依赖
+   pip install -r requirements.txt
+   
+   # 前端依赖
    cd frontend
    npm install
+   cd ..
+   ```
+
+2. **配置 API Key**
+   ```bash
+   # 设置环境变量
+   set GEMINI_API_KEY=您的API_KEY
+   ```
+
+3. **启动服务**
+   ```bash
+   # 终端 1: 启动 Gemini AI 服务
+   python server_gemini.py
+   
+   # 终端 2: 启动优化版后端
+   cd backend
+   python app_excel_optimized.py
+   
+   # 终端 3: 启动前端
+   cd frontend  
    npm start
    ```
 

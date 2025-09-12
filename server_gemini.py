@@ -9,8 +9,10 @@ from typing import List, Optional, Dict, Any
 import io
 import re
 
+import os
+
 # Gemini API 配置
-API_KEY = "AIzaSyBQkCLkovABnjZeOVRV-FoxkFPkayvNXVQ"
+API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBQkCLkovABnjZeOVRV-FoxkFPkayvNXVQ")  # 请设置环境变量或更换为您的API Key
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 headers = {
@@ -106,37 +108,53 @@ def analyze_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
 
 def generate_data_insights(data_analysis: Dict[str, Any]) -> str:
     """使用 Gemini 生成数据洞察"""
-    prompt = f"""作为专业数据分析师，请分析以下数据集：
+    prompt = f"""我是一个Excel数据分析助手，请帮我分析这份数据，提供实用的业务洞察：
 
-数据概况：
-- 总行数：{data_analysis['row_count']}
-- 总列数：{data_analysis['column_count']}
+数据基本情况：
+- 数据量：{data_analysis['row_count']}行，{data_analysis['column_count']}列
 
-字段详情：
+字段信息：
 """
     
+    # 分类字段信息
+    categorical_fields = []
+    numeric_fields = []
+    
     for col, info in data_analysis['columns'].items():
-        prompt += f"\n- {col}: {info['type']}类型，缺失值{info['null_count']}个，唯一值{info['unique_count']}个"
-        if info['type'] == 'numeric' and 'stats' in info:
-            stats = info['stats']
-            prompt += f"（均值：{stats['mean']:.2f}，标准差：{stats['std']:.2f}）"
-        elif info['type'] == 'categorical' and 'top_values' in info:
-            top_vals = list(info['top_values'].keys())[:3]
-            prompt += f"（主要类别：{', '.join(map(str, top_vals))}）"
+        if info['type'] == 'numeric':
+            numeric_fields.append(col)
+            if 'stats' in info:
+                stats = info['stats']
+                prompt += f"\n📊 {col}（数值）：平均{stats['mean']:.1f}，范围{stats['min']:.1f}-{stats['max']:.1f}"
+        elif info['type'] == 'categorical':
+            categorical_fields.append(col)
+            if 'top_values' in info:
+                top_vals = list(info['top_values'].keys())[:3]
+                prompt += f"\n🏷️ {col}（分类）：主要包括{', '.join(map(str, top_vals))}等{info['unique_count']}个类别"
+        else:
+            prompt += f"\n📝 {col}（{info['type']}）：{info['unique_count']}个不同值"
     
     prompt += f"""
 
 数据样例：
-{json.dumps(data_analysis['preview'][:3], ensure_ascii=False, indent=2)}
+{json.dumps(data_analysis['preview'][:2], ensure_ascii=False, indent=2)}
 
-请提供：
-1. 数据质量评估
-2. 字段特征分析
-3. 潜在的分析方向
-4. 数据清洗建议
-5. 可视化建议
+请像Excel分析师一样，提供以下实用分析：
 
-请用专业但易懂的语言回答。"""
+1. 🎯 业务场景识别：这是什么类型的数据（销售、产品、财务等）？
+
+2. 📊 关键发现：
+   - 哪些数值最值得关注？
+   - 哪些分类维度最重要？
+   - 有什么明显的模式或特点？
+
+3. 📈 排行榜建议：可以做哪些有意义的排名分析？
+
+4. 📉 图表建议：推荐3个最有价值的图表组合
+
+5. 💡 业务洞察：从数据中能得出什么实用的结论？
+
+请用简单直白的语言，像Excel用户一样思考问题。"""
     
     return call_gemini(prompt)
 
@@ -226,49 +244,47 @@ def analyze_data(request: ExcelAnalysisRequest):
         # 构建专业的分析提示词
         columns_str = ", ".join(request.columns)
         
-        prompt = f"""你是一位资深数据分析师，请对以下数据进行专业分析：
+        prompt = f"""我是一个Excel数据分析助手，用户上传了包含以下字段的Excel文件：
 
 数据字段：{columns_str}
 
-{f"用户需求：{request.custom_requirements}" if request.custom_requirements else ""}
+{f"用户的具体需求：{request.custom_requirements}" if request.custom_requirements else ""}
 
 {f"数据样例：{request.data_sample}" if request.data_sample else ""}
 
-请按以下结构进行专业分析：
+请像Excel分析师一样，提供实用的数据分析：
 
-## 1. 数据概览与质量评估
-- 数据规模和结构分析
-- 数据质量问题识别
-- 字段类型和特征分析
+## 📊 数据快速解读
+- 这是什么类型的业务数据？（销售、产品、财务、人员等）
+- 数据的基本情况和质量如何？
+- 哪些字段最重要，为什么？
 
-## 2. 描述性统计分析
-- 数值字段的分布特征
-- 分类字段的频次分析
-- 异常值和离群点识别
+## 🎯 核心业务发现
+- 从数据中能看出哪些关键信息？
+- 有什么值得关注的数字或趋势？
+- 哪些方面表现突出，哪些需要改进？
 
-## 3. 深度业务分析
-- 关键指标识别和计算
-- 趋势分析（如有时间字段）
-- 相关性分析
-- 细分市场分析
+## 📈 实用排行榜分析
+- 可以做哪些有意义的排名（如销量排行、品牌对比等）？
+- 前几名和后几名有什么特点？
+- 如何用Excel函数实现这些排名？
 
-## 4. 可视化建议
-- 推荐的图表类型和原因
-- 关键可视化维度
-- 仪表板设计建议
+## 📊 推荐图表组合
+- 推荐3个最有价值的图表类型
+- 每个图表用什么字段组合最合适？
+- 这些图表能回答什么业务问题？
 
-## 5. 业务洞察与建议
-- 核心发现和洞察
-- 业务优化建议
-- 风险点识别
-- 后续分析方向
+## 💡 业务建议和行动
+- 基于数据分析，有什么具体的改进建议？
+- 哪些指标需要持续关注？
+- 下一步应该收集什么额外数据？
 
-## 6. 数据驱动的行动建议
-- 短期改进措施
-- 长期战略建议
-- KPI监控建议
+## 🔍 进一步分析方向
+- 如果要深入分析，建议从哪些维度切入？
+- 可以做哪些有趣的交叉对比？
+- 什么样的细分分析最有价值？
 
-请用专业的数据分析语言，提供具体、可执行的分析结果。"""
+请用简单易懂的语言，像和Excel用户对话一样，提供实用的分析结果。"""
 
         # 调用 Gemini 进行分析
         analysis_result = call_gemini(prompt)
@@ -324,39 +340,44 @@ def attribution_analysis(request: ExcelAnalysisRequest):
         columns_str = ", ".join(request.columns)
         target_metric = request.custom_requirements or "主要指标"
         
-        prompt = f"""作为资深数据分析师，请对以下数据进行专业的归因分析：
+        prompt = f"""我需要分析影响【{target_metric}】的关键因素，数据包含以下字段：
 
 数据字段：{columns_str}
-目标指标：{target_metric}
+分析目标：{target_metric}
 
-请进行深度归因分析：
+请像Excel分析师一样，进行实用的影响因素分析：
 
-## 1. 指标拆解分析
-- 识别影响{target_metric}的关键驱动因素
-- 分析各因素的贡献度和重要性
-- 构建指标分解框架
+## 🎯 影响因素识别
+- 在这些字段中，哪些最可能影响{target_metric}？
+- 按影响程度给这些因素排个序
+- 哪些是直接影响，哪些是间接影响？
 
-## 2. 因果关系分析
-- 分析各字段与目标指标的因果关系
-- 识别直接影响因素和间接影响因素
-- 评估影响的强度和方向
+## 📊 关键发现
+- 从数据角度看，{target_metric}主要受什么因素驱动？
+- 有没有发现意外的影响关系？
+- 哪些因素的影响最容易被忽视？
 
-## 3. 敏感性分析
-- 分析哪些因素对目标指标最敏感
-- 计算弹性系数和影响程度
-- 识别关键控制点
+## 📈 实用的Excel分析方法
+- 可以用哪些Excel函数来验证这些影响关系？
+- 建议做哪些透视表分析？
+- 如何制作有效的对比图表？
 
-## 4. 场景分析
-- 分析不同情况下的指标表现
-- 识别最佳实践和改进机会
-- 提供优化路径建议
+## 💡 改进建议
+- 要提升{target_metric}，应该重点关注哪些方面？
+- 哪些是"快赢"的改进点（容易实现且效果明显）？
+- 哪些需要长期投入？
 
-## 5. 实用建议
-- 提供具体的优化措施
-- 建议监控重点和预警指标
-- 制定改进行动计划
+## 🔍 深入分析建议
+- 建议按什么维度进一步细分分析？
+- 什么样的数据组合最能说明问题？
+- 如果要做预测，重点应该监控哪些指标？
 
-请提供专业、具体、可执行的归因分析结果。"""
+## ⚠️ 注意事项
+- 分析过程中需要注意什么陷阱？
+- 哪些因素可能存在相互影响？
+- 有什么潜在的风险需要关注？
+
+请提供具体可操作的分析建议，就像Excel专家在指导具体的数据分析工作。"""
 
         analysis_result = call_gemini(prompt)
         

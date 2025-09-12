@@ -14,7 +14,7 @@ function App() {
 
   const handleUploadSuccess = (data) => {
     setUploadedFile(data.filename);
-    setSheetsData(data.sheets);
+    setSheetsData(data.sheets || data.sheets_data);
     setDataPreview(data.data_preview);
     
     if (data.data_preview && !data.data_preview.error) {
