@@ -10,11 +10,18 @@ const { Title } = Typography;
 function App() {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [sheetsData, setSheetsData] = useState(null);
+  const [dataPreview, setDataPreview] = useState(null);
 
   const handleUploadSuccess = (data) => {
     setUploadedFile(data.filename);
     setSheetsData(data.sheets);
-    message.success('文件上传成功！');
+    setDataPreview(data.data_preview);
+    
+    if (data.data_preview && !data.data_preview.error) {
+      message.success('文件上传成功！已生成数据预览');
+    } else {
+      message.success('文件上传成功！');
+    }
   };
 
   const handleUploadError = (error) => {
@@ -38,9 +45,11 @@ function App() {
           <DataAnalysis 
             filename={uploadedFile}
             sheetsData={sheetsData}
+            dataPreview={dataPreview}
             onReset={() => {
               setUploadedFile(null);
               setSheetsData(null);
+              setDataPreview(null);
             }}
           />
         )}

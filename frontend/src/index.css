@@ -68,3 +68,33 @@ code {
   align-items: center;
   height: 200px;
 }
+
+/* 数据预览表格样式 */
+.analysis-container .ant-table-tbody > tr.even-row > td {
+  background-color: #fafafa;
+}
+
+.analysis-container .ant-table-tbody > tr.odd-row > td {
+  background-color: #ffffff;
+}
+
+.analysis-container .ant-table-tbody > tr:hover > td {
+  background-color: #e6f7ff !important;
+}
+
+.analysis-container .ant-table-thead > tr > th {
+  background-color: #f0f2f5;
+  font-weight: 600;
+  border-bottom: 2px solid #d9d9d9;
+}
+
+.analysis-container .ant-table-cell {
+  padding: 8px 12px;
+}
+
+.analysis-container .ant-tag {
+  margin: 0;
+  font-size: 11px;
+  padding: 0 4px;
+  line-height: 16px;
+}
