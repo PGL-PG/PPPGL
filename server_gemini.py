@@ -12,7 +12,7 @@ import re
 import os
 
 # Gemini API 配置
-API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBQkCLkovABnjZeOVRV-FoxkFPkayvNXVQ")  # 请设置环境变量或更换为您的API Key
+API_KEY = "AIzaSyBQkCLkovABnjZeOVRV-FoxkFPkayvNXVQ"  # 直接设置API Key
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 headers = {

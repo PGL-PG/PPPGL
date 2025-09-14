@@ -27,8 +27,14 @@ def after_request(response):
 # 配置
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
-# 直接调用 Google Gemini API（需设置环境变量 GEMINI_API_KEY）
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+# 简化的 Gemini API 调用
+API_KEY = "AIzaSyBQkCLkovABnjZeOVRV-FoxkFPkayvNXVQ"  # 直接设置API Key
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+
+headers = {
+    "Content-Type": "application/json",
+    "X-goog-api-key": API_KEY
+}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -64,7 +70,7 @@ def generate_basic_stats_overview(df, key_fields, business_scenario):
     # 字段基础统计
     for col in df.columns:
         col_data = df[col]
-        field_type = key_fields.get('字段类型', {}).get(col, 'unknown')
+        field_type = detect_data_type(col_data)  # 直接检测字段类型
         
         stats = {
             "type": field_type,
@@ -79,13 +85,18 @@ def generate_basic_stats_overview(df, key_fields, business_scenario):
                 "median": round(col_data.median(), 2) if not col_data.empty else None,
                 "min": col_data.min() if not col_data.empty else None,
                 "max": col_data.max() if not col_data.empty else None,
-                "std": round(col_data.std(), 2) if not col_data.empty else None
+                "std": round(col_data.std(), 2) if not col_data.empty else None,
+                "unique_count": col_data.nunique()
             })
-        elif field_type == 'categorical':
+        elif field_type in ['categorical', 'text']:
             stats.update({
                 "unique_count": col_data.nunique(),
                 "most_frequent": col_data.mode().iloc[0] if not col_data.mode().empty else None,
                 "most_frequent_count": col_data.value_counts().iloc[0] if not col_data.value_counts().empty else 0
+            })
+        else:
+            stats.update({
+                "unique_count": col_data.nunique()
             })
         
         overview["field_summary"][col] = stats
@@ -173,9 +184,13 @@ def detect_data_type(series):
         pass
     
     # 检测分类数据
-    unique_ratio = len(non_null_series.unique()) / len(non_null_series)
-    if unique_ratio < 0.5 and len(non_null_series.unique()) < 20:
-        return 'categorical'
+    if len(non_null_series) > 0:
+        unique_ratio = len(non_null_series.unique()) / len(non_null_series)
+        unique_count = len(non_null_series.unique())
+        
+        # 如果唯一值比例低且类别数不多，认为是分类数据
+        if unique_ratio < 0.5 and unique_count < 20:
+            return 'categorical'
     
     return 'text'
 
@@ -424,241 +439,82 @@ def analyze_data():
         except Exception as _e:
             pass
 
-        # 热力图：数值字段相关性矩阵 + 散点：最强相关对
-        try:
-            numeric_cols = [c for c in key_fields.get("数值字段", [])][:6]
-            if len(numeric_cols) >= 2:
-                corr_df = df[numeric_cols].dropna()
-                if len(corr_df) > 1:
-                    corr = corr_df.corr()
-                    heatmap_data = []
-                    for i, f1 in enumerate(numeric_cols):
-                        for j, f2 in enumerate(numeric_cols):
-                            val = corr.loc[f1, f2]
-                            if pd.isna(val):
-                                continue
-                            heatmap_data.append({
-                                "x": i,
-                                "y": j,
-                                "value": round(float(val), 3),
-                                "field1": f1,
-                                "field2": f2
-                            })
-                    charts.append({
-                        "type": "heatmap",
-                        "title": "变量相关性热力图",
-                        "data": heatmap_data
-                    })
-
-                    # 找到最强（非对角线）相关对并绘制散点
-                    strongest = None
-                    strongest_pair = (None, None)
-                    for i in range(len(numeric_cols)):
-                        for j in range(i+1, len(numeric_cols)):
-                            v = corr.loc[numeric_cols[i], numeric_cols[j]]
-                            if pd.isna(v):
-                                continue
-                            if strongest is None or abs(v) > abs(strongest):
-                                strongest = v
-                                strongest_pair = (numeric_cols[i], numeric_cols[j])
-                    if strongest_pair[0] and strongest_pair[1]:
-                        pair_df = df[[strongest_pair[0], strongest_pair[1]]].dropna()
-                        if len(pair_df) > 1:
-                            # 气泡大小用第二个变量的相对幅度，简单缩放
-                            x_vals = pair_df[strongest_pair[0]].astype(float)
-                            y_vals = pair_df[strongest_pair[1]].astype(float)
-                            size_base = max(y_vals.max() - y_vals.min(), 1.0)
-                            scatter_data = []
-                            for xv, yv in zip(x_vals.tolist(), y_vals.tolist()):
-                                scatter_data.append([
-                                    float(xv),
-                                    float(yv),
-                                    max((float(yv) - float(y_vals.min())) / size_base * 100.0, 8.0),
-                                    f"{strongest_pair[0]}·{strongest_pair[1]}"
-                                ])
-                            charts.append({
-                                "type": "scatter",
-                                "title": f"最强相关散点（{strongest_pair[0]} vs {strongest_pair[1]}，r={strongest:.2f})",
-                                "data": scatter_data
-                            })
-        except Exception as _e:
-            pass
-
-        # 箱线图：数值字段分布与异常值
-        try:
-            numeric_cols_for_box = [c for c in key_fields.get("数值字段", [])][:4]
-            box_data = []
-            for col in numeric_cols_for_box:
-                series = pd.to_numeric(df[col], errors='coerce').dropna()
-                if len(series) == 0:
-                    continue
-                q1, median, q3 = series.quantile([0.25, 0.5, 0.75])
-                iqr = q3 - q1
-                lower = float(q1 - 1.5 * iqr)
-                upper = float(q3 + 1.5 * iqr)
-                outliers = series[(series < lower) | (series > upper)].tolist()
-                box_data.append({
-                    "name": col,
-                    "min": float(series.min()),
-                    "q1": float(q1),
-                    "median": float(median),
-                    "q3": float(q3),
-                    "max": float(series.max()),
-                    "outliers": [float(x) for x in outliers[:20]]
-                })
-            if box_data:
-                charts.append({
-                    "type": "boxplot",
-                    "title": "数值字段分布箱线图",
-                    "data": box_data
-                })
-        except Exception as _e:
-            pass
+        # 只保留核心业务分析图表，移除复杂的统计图表
         
         # 生成基础统计概览（由浅入深的第一步）
         basic_stats_overview = generate_basic_stats_overview(df, key_fields, business_scenario)
         
-        # 尝试调用Gemini获取AI洞察/结构化结果（直连Google API）
-        ai_insights = ""
-        ai_result_full = None
-        ai_called = False
-        ai_error = None
-        try:
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if not api_key:
-                raise Exception("缺少 GEMINI_API_KEY 环境变量")
-
-            prompt_header = (
-                "你是一位拥有10年经验的资深商业数据分析师，需对任意Excel数据进行由浅入深的专业分析。"
-                "基于提供的基础统计、多维分析结果，输出结构化中文报告，严格按以下层次递进：\n\n"
-                "## 第一部分：基础数据概览\n"
-                "1) 数据规模：总行数、列数、关键字段识别\n"
-                "2) 基础统计：各字段的基本统计量（均值、中位数、最值、缺失值等）\n"
-                "3) 简单聚合：如品牌数量、销量TOP、价格分布等Excel基础函数结果\n\n"
-                "## 第二部分：多维度深度分析\n"
-                "4) 维度对比分析：TOP-N排名、集中度分析、帕累托80/20法则\n"
-                "5) 价格带分析：如有价格字段，分析价格区间分布与热销段\n"
-                "6) 相关性分析：重要指标间的相关关系与强度\n"
-                "7) 异常值检测：识别异常数据点及其可能原因\n\n"
-                "## 第三部分：商业洞察与建议\n"
-                "8) 关键发现：3-5个最重要的业务洞察\n"
-                "9) 归因诊断：对异常现象的可能原因分析\n"
-                "10) 行动建议：3-6条可执行的优化建议，按优先级排序\n\n"
-                "要求：\n"
-                "- 语言专业、逻辑清晰、由浅入深\n"
-                "- 每个分析点都要有具体数据支撑\n"
-                "- 避免空洞陈述，给出具体数值和比例\n"
-                "- 如发现数据质量问题（如品牌名称不统一），要明确指出并给出清洗建议\n"
-                "- 分析要贴合实际业务场景，给出可操作的改进建议"
-            )
-            # 为模型提供更充分的结构化上下文（避免空话）：
-            # 包含字段类型、基础统计、排行榜Top/N、分组Top/N、趋势存在性等
-            top_rank_key = None
-            top_rank_sample = {}
-            if "排行榜" in basic_analysis and basic_analysis["排行榜"]:
-                top_rank_key = list(basic_analysis["排行榜"].keys())[0]
-                top_rank_sample = dict(list(basic_analysis["排行榜"][top_rank_key].items())[:8])
-
-            group_key = None
-            group_sample = {}
-            if "分组统计" in basic_analysis and basic_analysis["分组统计"]:
-                group_key = list(basic_analysis["分组统计"].keys())[0]
-                group_sample = dict(list(basic_analysis["分组统计"][group_key].items())[:8])
-
-            payload_text = {
-                "basic_stats_overview": basic_stats_overview,
-                "columns": list(df.columns),
-                "data_sample": df.head(3).to_dict('records') if len(df) > 0 else [],
-                "columns_info": columns_info,
-                "key_fields": key_fields,
-                "basic_analysis": basic_analysis,
-                "dimensional_analysis": dimensional_analysis,
-                "top_rank_title": top_rank_key,
-                "top_rank_sample": top_rank_sample,
-                "group_title": group_key,
-                "group_sample": group_sample,
-                "business_scenario": business_scenario,
-                "analysis_level": analysis_level,
-                "custom_requirements": custom_requirements
-            }
-
-            # 预先序列化为纯JSON友好格式
-            payload_json = json.dumps(sanitize_for_json(payload_text), ensure_ascii=False)
-
+        # 简化的Gemini调用（基于您的示例）
+        def analyze_excel(columns, data_sample=None):
+            """
+            调用 Gemini 模型，基于 Excel 字段做多维度分析 & 可视化思路
+            """
+            columns_str = ', '.join(columns)
+            
+            # 简洁的分析结果prompt，不要分析过程
+            data_sample_text = f"数据样例：\n{data_sample}" if data_sample else ""
+            
+            prompt = f"""
+            请对以下数据进行专业分析，直接给出分析结果和结论，不要描述分析过程。
+            
+            数据字段：{columns_str}
+            {data_sample_text}
+            
+            要求：
+            1. 直接给出关键发现，不要说"我将分析"、"首先"等过程描述
+            2. 只要结果和结论，如"ThinkPad销量最高1000台"而不是"可以分析销量排行"
+            3. 给出3-5个最重要的业务洞察
+            4. 给出2-3个具体建议
+            5. 简洁明了，避免冗长描述
+            
+            请按以下格式回答：
+            
+            ## 关键发现
+            - [具体发现1]
+            - [具体发现2]
+            - [具体发现3]
+            
+            ## 业务建议
+            - [具体建议1]
+            - [具体建议2]
+            """
+            
             body = {
                 "contents": [
                     {
                         "role": "user",
-                        "parts": [
-                            {"text": prompt_header},
-                            {"text": payload_json}
-                        ]
+                        "parts": [{"text": prompt}]
                     }
                 ]
             }
-
-            headers = {
-                "Content-Type": "application/json",
-                "X-goog-api-key": api_key
-            }
-
-            response = requests.post(GEMINI_API_URL, headers=headers, json=body, timeout=60)
-            response.raise_for_status()
-            result = response.json()
-            # 提取文本
-            ai_text = ""
-            try:
-                ai_text = result["candidates"][0]["content"]["parts"][0]["text"]
-            except Exception:
-                ai_text = ""
-            ai_insights = ai_text or ""
-            ai_result_full = {"analysis_report": ai_insights}
-            ai_called = True
             
-        except Exception as e:
-            print(f"调用Gemini失败: {e}")
-            ai_error = str(e)
-            ai_insights = "AI分析服务暂时不可用，已为您提供基础分析结果。"
-
-        # 结果整合策略：
-        # - gemini_only: 若有AI结果，则优先输出AI结构化结果；无则报错提示不可用
-        # - hybrid(default): 若AI有结构化 charts/primary/secondary，则覆盖本地对应部分；否则保留本地
-        # - local_only: 忽略AI，仅返回本地
-
-        if ai_mode == 'gemini_only':
-            if ai_result_full:
-                return jsonify(sanitize_for_json({
-                    "status": "success",
-                    "analysis_type": ai_result_full.get("analysis_type", f"excel_analysis_{analysis_level}"),
-                    "business_scenario": business_scenario,
-                    "data_overview": {
-                        "total_rows": len(df),
-                        "total_columns": len(df.columns),
-                        "key_fields": key_fields,
-                        "missing_data": {col: df[col].isnull().sum() for col in df.columns if df[col].isnull().sum() > 0}
-                    },
-                    "basic_analysis": ai_result_full.get("basic_analysis", basic_analysis),
-                    "dimensional_analysis": ai_result_full.get("dimensional_analysis", dimensional_analysis),
-                    "practical_insights": ai_result_full.get("practical_insights", practical_insights),
-                    "ai_insights": ai_insights,
-                    "charts": ai_result_full.get("charts", charts),
-                    "primary_analysis": ai_result_full.get("primary_analysis"),
-                    "secondary_analysis": ai_result_full.get("secondary_analysis"),
-                    "recommendations": ai_result_full.get("recommendations", []),
-                    "ai_called": ai_called,
-                    "ai_error": ai_error
-                }))
+            try:
+                response = requests.post(API_URL, headers=headers, json=body, timeout=30)
+                response.raise_for_status()
+                result = response.json()
+                return result["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception as e:
+                return f"AI分析服务暂时不可用：{str(e)}"
+        
+        # 调用简化的Gemini分析
+        ai_insights = ""
+        ai_called = False
+        ai_error = None
+        
+        try:
+            if API_KEY and API_KEY != "YOUR_API_KEY_HERE":
+                columns_list = list(df.columns)
+                data_sample = df.head(3).to_dict('records') if len(df) > 0 else None
+                ai_insights = analyze_excel(columns_list, str(data_sample)[:500] if data_sample else None)
+                ai_called = True
             else:
-                return jsonify({"error": "AI分析服务不可用，gemini_only 模式下无法完成分析"}), 503
+                ai_error = "未配置GEMINI_API_KEY环境变量"
+        except Exception as e:
+            ai_error = str(e)
+            ai_insights = "AI分析服务暂时不可用。"
 
-        if ai_mode == 'hybrid' and ai_result_full:
-            charts = ai_result_full.get("charts", charts) or charts
-            primary_analysis = ai_result_full.get("primary_analysis")
-            secondary_analysis = ai_result_full.get("secondary_analysis")
-        else:
-            primary_analysis = None
-            secondary_analysis = None
-
+        # 简化的结果返回，直接返回本地分析 + AI洞察
+        # 移除复杂的模式切换逻辑，符合用户直接调用的偏好
         return jsonify(sanitize_for_json({
             "status": "success",
             "analysis_type": f"excel_analysis_{analysis_level}",
@@ -675,8 +531,6 @@ def analyze_data():
             "practical_insights": practical_insights,
             "ai_insights": ai_insights,
             "charts": charts,
-            "primary_analysis": primary_analysis,
-            "secondary_analysis": secondary_analysis,
             "recommendations": [
                 f"💡 这是{business_scenario}数据，建议重点关注{key_fields['数值字段'][0] if key_fields['数值字段'] else '核心指标'}",
                 f"📊 可以按{key_fields['分类字段'][0] if key_fields['分类字段'] else '主要维度'}进行分组分析",

@@ -483,112 +483,141 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
 
       {analysisResult && !loading && (
         <>
-          {/* 基础统计概览 */}
+          {/* 基础数据概览 - 文本形式 */}
           {analysisResult.basic_stats_overview && (
             <Card 
               title={<><BarChartOutlined /> 基础数据概览</>}
               style={{ marginBottom: 24 }}
             >
-              <Row gutter={[16, 16]}>
-                <Col xs={24} sm={8}>
-                  <Statistic 
-                    title="数据规模" 
-                    value={analysisResult.basic_stats_overview.data_scale.total_rows}
-                    suffix={`行 × ${analysisResult.basic_stats_overview.data_scale.total_columns}列`}
-                  />
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Statistic 
-                    title="业务场景" 
-                    value={analysisResult.basic_stats_overview.data_scale.business_scenario}
-                  />
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Statistic 
-                    title="数据质量" 
-                    value={analysisResult.basic_stats_overview.data_quality.missing_data_fields.length}
-                    suffix="个字段有缺失值"
-                    valueStyle={{ color: analysisResult.basic_stats_overview.data_quality.missing_data_fields.length > 0 ? '#cf1322' : '#3f8600' }}
-                  />
-                </Col>
-              </Row>
-              
-              {/* 字段基础统计 */}
-              <Divider orientation="left">字段统计</Divider>
-              <Row gutter={[16, 16]}>
-                {Object.entries(analysisResult.basic_stats_overview.field_summary).map(([field, stats]) => (
-                  <Col xs={24} sm={12} md={8} key={field}>
-                    <Card size="small" style={{ height: '100%' }}>
-                      <Statistic 
-                        title={field}
-                        value={stats.type === 'numeric' ? stats.mean : stats.unique_count}
-                        suffix={stats.type === 'numeric' ? '(均值)' : '(唯一值)'}
-                        precision={stats.type === 'numeric' ? 2 : 0}
-                      />
-                      <div style={{ fontSize: '12px', color: '#666', marginTop: 8 }}>
-                        <div>类型: {stats.type}</div>
-                        <div>非空: {stats.non_null_count}/{analysisResult.basic_stats_overview.data_scale.total_rows}</div>
+              <div style={{ 
+                padding: '16px',
+                background: '#f8f9fa',
+                borderRadius: '8px',
+                fontSize: '14px',
+                lineHeight: '1.8',
+                color: '#2c3e50'
+              }}>
+                <Text strong style={{ fontSize: '16px', color: '#1890ff', display: 'block', marginBottom: '12px' }}>
+                  📊 数据规模概述
+                </Text>
+                本次分析的数据包含 <Text strong style={{ color: '#52c41a' }}>
+                  {analysisResult.basic_stats_overview.data_scale.total_rows}
+                </Text> 行数据，
+                <Text strong style={{ color: '#52c41a' }}>
+                  {analysisResult.basic_stats_overview.data_scale.total_columns}
+                </Text> 个字段，
+                业务场景识别为 <Text strong style={{ color: '#722ed1' }}>
+                  {analysisResult.basic_stats_overview.data_scale.business_scenario}
+                </Text>。
+                
+                {analysisResult.basic_stats_overview.data_quality.missing_data_fields.length > 0 ? (
+                  <Text style={{ color: '#fa8c16' }}>
+                    数据质量方面，发现 <Text strong>
+                      {analysisResult.basic_stats_overview.data_quality.missing_data_fields.length}
+                    </Text> 个字段存在缺失值，建议在正式分析前进行数据清洗。
+                  </Text>
+                ) : (
+                  <Text style={{ color: '#52c41a' }}>
+                    数据质量良好，无明显缺失值问题。
+                  </Text>
+                )}
+                
+                <br /><br />
+                
+                <Text strong style={{ fontSize: '16px', color: '#1890ff', display: 'block', marginBottom: '8px' }}>
+                  📋 字段统计概述
+                </Text>
+                {Object.entries(analysisResult.basic_stats_overview.field_summary).map(([field, stats], index) => {
+                  if (stats.type === 'numeric') {
+                    return (
+                      <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                        • <Text strong>{field}</Text>（数值字段）：
+                        均值 <Text code>{stats.mean?.toFixed(2) || 'N/A'}</Text>，
+                        中位数 <Text code>{stats.median?.toFixed(2) || 'N/A'}</Text>，
+                        取值范围 <Text code>{stats.min}-{stats.max}</Text>
                         {stats.null_count > 0 && (
-                          <div style={{ color: '#cf1322' }}>缺失: {stats.null_percentage}%</div>
+                          <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
                         )}
-                      </div>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-
-              {/* TOP排名 */}
-              {Object.keys(analysisResult.basic_stats_overview.top_rankings).length > 0 && (
-                <>
-                  <Divider orientation="left">TOP排名</Divider>
-                  <Row gutter={[16, 16]}>
-                    {Object.entries(analysisResult.basic_stats_overview.top_rankings).map(([field, ranking]) => (
-                      <Col xs={24} sm={12} key={field}>
-                        <Card size="small" title={`${field} TOP5`}>
-                          <List
-                            size="small"
-                            dataSource={Object.entries(ranking.top_5)}
-                            renderItem={([value, count]) => (
-                              <List.Item>
-                                <Space>
-                                  <Text strong>{value}</Text>
-                                  <Text type="secondary">{count}次</Text>
-                                </Space>
-                              </List.Item>
-                            )}
-                          />
-                        </Card>
-                      </Col>
-                    ))}
-                  </Row>
-                </>
-              )}
-
-              {/* 数据质量问题 */}
-              {analysisResult.basic_stats_overview.data_quality.potential_issues.length > 0 && (
-                <>
-                  <Divider orientation="left">数据质量提醒</Divider>
-                  <Alert
-                    message="发现潜在数据质量问题"
-                    description={
-                      <div>
-                        {analysisResult.basic_stats_overview.data_quality.potential_issues.map((issue, index) => (
-                          <div key={index} style={{ marginBottom: 8 }}>
-                            <Text strong>{issue.field}:</Text> {issue.issue}
-                            {issue.examples && issue.examples.length > 0 && (
-                              <div style={{ marginLeft: 16, fontSize: '12px', color: '#666' }}>
-                                例如: {issue.examples.map(ex => `${ex.base} ↔ ${ex.similar.join(', ')}`).join('; ')}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    }
-                    type="warning"
-                    showIcon
-                  />
-                </>
-              )}
+                      </Text>
+                    );
+                  } else if (stats.type === 'categorical') {
+                    return (
+                      <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                        • <Text strong>{field}</Text>（分类字段）：
+                        共 <Text code>{stats.unique_count}</Text> 个不同取值，
+                        最常见的是 <Text code>"{stats.most_frequent}"</Text>
+                        （出现{stats.most_frequent_count}次）
+                        {stats.null_count > 0 && (
+                          <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
+                        )}
+                      </Text>
+                    );
+                  } else {
+                    return (
+                      <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                        • <Text strong>{field}</Text>（{stats.type}字段）：
+                        {stats.unique_count} 个不同值
+                        {stats.null_count > 0 && (
+                          <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
+                        )}
+                      </Text>
+                    );
+                  }
+                })}
+                
+                {/* TOP排名概述 */}
+                {Object.keys(analysisResult.basic_stats_overview.top_rankings).length > 0 && (
+                  <>
+                    <br />
+                    <Text strong style={{ fontSize: '16px', color: '#1890ff', display: 'block', marginBottom: '8px' }}>
+                      🏆 TOP排名概述
+                    </Text>
+                    {Object.entries(analysisResult.basic_stats_overview.top_rankings).map(([field, ranking]) => {
+                      const topItems = Object.entries(ranking.top_5).slice(0, 3);
+                      return (
+                        <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                          • <Text strong>{field}</Text> 排名前三位：
+                          {topItems.map(([value, count], idx) => 
+                            <Text code key={idx} style={{ marginLeft: '4px' }}>
+                              {idx + 1}. {value}（{count}次）
+                            </Text>
+                          )}
+                          ，共有{ranking.total_unique}个不同类别
+                        </Text>
+                      );
+                    })}
+                  </>
+                )}
+                
+                {/* 数据质量提醒 */}
+                {analysisResult.basic_stats_overview.data_quality.potential_issues.length > 0 && (
+                  <>
+                    <br />
+                    <div style={{ 
+                      padding: '12px',
+                      background: '#fff7e6',
+                      border: '1px solid #ffd591',
+                      borderRadius: '6px',
+                      marginTop: '12px'
+                    }}>
+                      <Text strong style={{ fontSize: '16px', color: '#fa8c16', display: 'block', marginBottom: '8px' }}>
+                        ⚠️ 数据质量提醒
+                      </Text>
+                      {analysisResult.basic_stats_overview.data_quality.potential_issues.map((issue, index) => (
+                        <Text key={index} style={{ display: 'block', marginBottom: '6px' }}>
+                          在 <Text strong>{issue.field}</Text> 字段中{issue.issue}，
+                          这可能影响分析准确性。
+                          {issue.examples && issue.examples.length > 0 && (
+                            <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '2px' }}>
+                              例如：{issue.examples.map(ex => `"${ex.base}" 与 "${ex.similar.join('、')}"`).join('；')}
+                            </Text>
+                          )}
+                        </Text>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </Card>
           )}
 
