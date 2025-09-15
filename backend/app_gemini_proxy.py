@@ -23,6 +23,7 @@ ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
 GEMINI_SERVER_URL = "http://localhost:8001"  # Gemini 服务地址
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = None  # 移除文件大小限制
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):

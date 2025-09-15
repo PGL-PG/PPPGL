@@ -17,7 +17,10 @@ import {
   Alert,
   Statistic,
   List,
-  Collapse
+  Collapse,
+  Tabs,
+  Dropdown,
+  Popconfirm
 } from 'antd';
 import { 
   FundOutlined, 
@@ -25,24 +28,39 @@ import {
   FileTextOutlined,
   BarChartOutlined,
   ExclamationCircleOutlined,
-  BulbOutlined
+  BulbOutlined,
+  FileExcelOutlined,
+  DeleteOutlined,
+  MoreOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import ChartDisplay from './ChartDisplay';
 import AttributionAnalysis from './AttributionAnalysis';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 const { Panel } = Collapse;
+const { TabPane } = Tabs;
 
-const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
+const DataAnalysis = ({ 
+  filename, 
+  sheetsData, 
+  dataPreview, 
+  uploadedFiles = [], 
+  currentFileIndex = 0, 
+  onSwitchFile, 
+  onRemoveFile, 
+  onShowUpload 
+}) => {
   const [selectedSheet, setSelectedSheet] = useState('');
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [customRequirements, setCustomRequirements] = useState('');
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showAttribution, setShowAttribution] = useState(false);
+  const [expandedFieldSummary, setExpandedFieldSummary] = useState(false);
 
   // 生成图表洞察的辅助函数
   const getChartInsight = (chartData, analysisResult, index) => {
@@ -186,6 +204,106 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
 
   const currentSheetData = selectedSheet && sheetsData ? sheetsData[selectedSheet] : null;
   const availableColumns = currentSheetData?.columns ? Object.keys(currentSheetData.columns) : [];
+
+  // 文件管理相关函数
+  const getFileMenuItems = (fileIndex) => {
+    return [
+      {
+        key: 'switch',
+        label: '切换到此文件',
+        icon: <FileExcelOutlined />,
+        onClick: () => onSwitchFile && onSwitchFile(fileIndex)
+      },
+      {
+        key: 'remove',
+        label: '移除此文件',
+        icon: <DeleteOutlined />,
+        danger: true,
+        onClick: () => {
+          Modal.confirm({
+            title: '确认移除文件',
+            content: `确定要移除文件 "${uploadedFiles[fileIndex]?.filename}" 吗？`,
+            onOk: () => onRemoveFile && onRemoveFile(fileIndex)
+          });
+        }
+      }
+    ];
+  };
+
+  // 渲染文件管理标签页
+  const renderFileManagement = () => {
+    if (!uploadedFiles || uploadedFiles.length <= 1) return null;
+
+    return (
+      <div className="fixed-file-management">
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <FileExcelOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
+              <Text strong style={{ color: '#1890ff' }}>文件管理</Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginLeft: '16px' }}>
+                {uploadedFiles.map((file, index) => (
+                  <div 
+                    key={index}
+                    style={{
+                      padding: '4px 10px',
+                      border: `1px solid ${index === currentFileIndex ? '#1890ff' : '#d9d9d9'}`,
+                      borderRadius: '4px',
+                      background: index === currentFileIndex ? '#e6f7ff' : '#fafafa',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '12px'
+                    }}
+                    onClick={() => onSwitchFile && onSwitchFile(index)}
+                  >
+                    <FileExcelOutlined style={{ 
+                      color: index === currentFileIndex ? '#1890ff' : '#666',
+                      fontSize: '12px'
+                    }} />
+                    <span style={{ 
+                      fontWeight: index === currentFileIndex ? 'bold' : 'normal',
+                      color: index === currentFileIndex ? '#1890ff' : '#333',
+                      maxWidth: '120px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {file.filename}
+                    </span>
+                    {uploadedFiles.length > 1 && (
+                      <Dropdown
+                        menu={{ items: getFileMenuItems(index) }}
+                        trigger={['click']}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button 
+                          type="text" 
+                          size="small" 
+                          icon={<MoreOutlined />}
+                          style={{ padding: '0 4px', height: '16px', fontSize: '10px' }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </Dropdown>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Button 
+              type="primary" 
+              icon={<FileExcelOutlined />}
+              onClick={onShowUpload}
+              size="small"
+            >
+              上传新文件
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // 全选/取消全选功能
   const handleSelectAllColumns = () => {
@@ -353,9 +471,13 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
   };
 
   return (
-    <div className="analysis-container">
-      {/* 1. 数据预览 */}
-      {renderDataPreview()}
+    <>
+      {/* 0. 固定的文件管理区域 */}
+      {renderFileManagement()}
+      
+      <div className={`analysis-container ${uploadedFiles && uploadedFiles.length > 1 ? 'content-with-fixed-management' : ''}`}>
+        {/* 1. 数据预览 */}
+        {renderDataPreview()}
 
       {/* 2. 分析建议 */}
       {renderAnalysisSuggestions()}
@@ -451,12 +573,6 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
           >
             {loading ? '分析中...' : '开始深度分析'}
           </Button>
-          <Button 
-            icon={<ReloadOutlined />}
-            onClick={onReset}
-          >
-            重新上传
-          </Button>
         </Space>
         
         {!selectedSheet && (
@@ -527,43 +643,71 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
                 <Text strong style={{ fontSize: '16px', color: '#1890ff', display: 'block', marginBottom: '8px' }}>
                   📋 字段统计概述
                 </Text>
-                {Object.entries(analysisResult.basic_stats_overview.field_summary).map(([field, stats], index) => {
-                  if (stats.type === 'numeric') {
-                    return (
-                      <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
-                        • <Text strong>{field}</Text>（数值字段）：
-                        均值 <Text code>{stats.mean?.toFixed(2) || 'N/A'}</Text>，
-                        中位数 <Text code>{stats.median?.toFixed(2) || 'N/A'}</Text>，
-                        取值范围 <Text code>{stats.min}-{stats.max}</Text>
-                        {stats.null_count > 0 && (
-                          <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
-                        )}
-                      </Text>
-                    );
-                  } else if (stats.type === 'categorical') {
-                    return (
-                      <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
-                        • <Text strong>{field}</Text>（分类字段）：
-                        共 <Text code>{stats.unique_count}</Text> 个不同取值，
-                        最常见的是 <Text code>"{stats.most_frequent}"</Text>
-                        （出现{stats.most_frequent_count}次）
-                        {stats.null_count > 0 && (
-                          <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
-                        )}
-                      </Text>
-                    );
-                  } else {
-                    return (
-                      <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
-                        • <Text strong>{field}</Text>（{stats.type}字段）：
-                        {stats.unique_count} 个不同值
-                        {stats.null_count > 0 && (
-                          <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
-                        )}
-                      </Text>
-                    );
-                  }
-                })}
+                {(() => {
+                  const fieldEntries = Object.entries(analysisResult.basic_stats_overview.field_summary);
+                  const shouldCollapse = fieldEntries.length > 5;
+                  const displayedFields = shouldCollapse && !expandedFieldSummary 
+                    ? fieldEntries.slice(0, 5) 
+                    : fieldEntries;
+                  
+                  return (
+                    <>
+                      {displayedFields.map(([field, stats], index) => {
+                        if (stats.type === 'numeric') {
+                          return (
+                            <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                              • <Text strong>{field}</Text>（数值字段）：
+                              均值 <Text code>{stats.mean?.toFixed(2) || 'N/A'}</Text>，
+                              中位数 <Text code>{stats.median?.toFixed(2) || 'N/A'}</Text>，
+                              取值范围 <Text code>{stats.min}-{stats.max}</Text>
+                              {stats.null_count > 0 && (
+                                <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
+                              )}
+                            </Text>
+                          );
+                        } else if (stats.type === 'categorical') {
+                          return (
+                            <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                              • <Text strong>{field}</Text>（分类字段）：
+                              共 <Text code>{stats.unique_count}</Text> 个不同取值，
+                              最常见的是 <Text code>"{stats.most_frequent}"</Text>
+                              （出现{stats.most_frequent_count}次）
+                              {stats.null_count > 0 && (
+                                <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
+                              )}
+                            </Text>
+                          );
+                        } else {
+                          return (
+                            <Text key={field} style={{ display: 'block', marginBottom: '6px' }}>
+                              • <Text strong>{field}</Text>（{stats.type}字段）：
+                              {stats.unique_count} 个不同值
+                              {stats.null_count > 0 && (
+                                <Text type="secondary">（缺失{stats.null_percentage}%）</Text>
+                              )}
+                            </Text>
+                          );
+                        }
+                      })}
+                      
+                      {shouldCollapse && (
+                        <div style={{ marginTop: '8px' }}>
+                          <Button 
+                            type="link" 
+                            size="small" 
+                            onClick={() => setExpandedFieldSummary(!expandedFieldSummary)}
+                            style={{ padding: '0', height: 'auto', fontSize: '12px' }}
+                          >
+                            {expandedFieldSummary 
+                              ? `收起字段详情 ▲` 
+                              : `展开全部字段（还有${fieldEntries.length - 5}个）▼`
+                            }
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 
                 {/* TOP排名概述 */}
                 {Object.keys(analysisResult.basic_stats_overview.top_rankings).length > 0 && (
@@ -938,7 +1082,8 @@ const DataAnalysis = ({ filename, sheetsData, dataPreview, onReset }) => {
           )}
         />
       </Modal>
-    </div>
+      </div>
+    </>
   );
 };
 

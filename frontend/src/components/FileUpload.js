@@ -6,7 +6,7 @@ import axios from 'axios';
 const { Dragger } = Upload;
 const { Title, Text } = Typography;
 
-const FileUpload = ({ onSuccess, onError }) => {
+const FileUpload = ({ onSuccess, onError, compact = false }) => {
   const [uploading, setUploading] = useState(false);
 
   const uploadProps = {
@@ -24,11 +24,12 @@ const FileUpload = ({ onSuccess, onError }) => {
         return false;
       }
       
-      const isLt10M = file.size / 1024 / 1024 < 10;
-      if (!isLt10M) {
-        message.error('文件大小不能超过 10MB！');
-        return false;
-      }
+      // 移除文件大小限制
+      // const isLt10M = file.size / 1024 / 1024 < 10;
+      // if (!isLt10M) {
+      //   message.error('文件大小不能超过 10MB！');
+      //   return false;
+      // }
       
       return true;
     },
@@ -60,22 +61,40 @@ const FileUpload = ({ onSuccess, onError }) => {
   return (
     <div className="upload-container">
       <Card>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <FileExcelOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
-          <Title level={3}>上传 Excel 文件开始分析</Title>
-          <Text type="secondary">
-            支持 .xlsx 和 .xls 格式，文件大小不超过 10MB
-          </Text>
-        </div>
+        {!compact && (
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <FileExcelOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
+            <Title level={3}>上传 Excel 文件开始分析</Title>
+            <Text type="secondary">
+              支持 .xlsx 和 .xls 格式，无文件大小限制
+            </Text>
+          </div>
+        )}
         
-        <Dragger {...uploadProps} style={{ padding: '40px 20px' }}>
+        {compact && (
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
+              <FileExcelOutlined style={{ marginRight: 8 }} />
+              上传新的 Excel 文件
+            </Title>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              支持 .xlsx/.xls 格式，无大小限制
+            </Text>
+          </div>
+        )}
+        
+        <Dragger {...uploadProps} style={{ padding: compact ? '20px 10px' : '40px 20px' }}>
           <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
+            <InboxOutlined style={{ fontSize: compact ? 32 : 48, color: '#1890ff' }} />
           </p>
-          <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-          <p className="ant-upload-hint">
-            系统将自动解析 Excel 文件的所有工作表和列信息
+          <p className="ant-upload-text" style={{ fontSize: compact ? '14px' : '16px' }}>
+            点击或拖拽文件到此区域上传
           </p>
+          {!compact && (
+            <p className="ant-upload-hint">
+              系统将自动解析 Excel 文件的所有工作表和列信息
+            </p>
+          )}
         </Dragger>
         
         {uploading && (

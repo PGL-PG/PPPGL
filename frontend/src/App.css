@@ -7,11 +7,36 @@
   display: flex;
   align-items: center;
   padding: 0 24px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .main-container {
   padding: 24px;
   background: #f5f5f5;
+  margin-top: 64px; /* Header高度补偿 */
+}
+
+/* 固定的文件管理区域 */
+.fixed-file-management {
+  position: fixed;
+  top: 64px; /* Header下方 */
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+  z-index: 999;
+  padding: 12px 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* 内容区域需要额外的顶部边距 */
+.content-with-fixed-management {
+  margin-top: 80px; /* 根据文件管理区域高度调整 */
 }
 
 .upload-container {

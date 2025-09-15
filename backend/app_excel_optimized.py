@@ -37,6 +37,7 @@ headers = {
 }
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = None  # 移除文件大小限制
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def sanitize_for_json(obj):

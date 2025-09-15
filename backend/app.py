@@ -36,6 +36,7 @@ def after_request(response):
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = None  # 移除文件大小限制
 
 # 移除了测试用的API配置，现在使用本地分析
 
