@@ -32,11 +32,11 @@ import {
   FileExcelOutlined,
   DeleteOutlined,
   MoreOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import ChartDisplay from './ChartDisplay';
-import AttributionAnalysis from './AttributionAnalysis';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -59,10 +59,84 @@ const DataAnalysis = ({
   const [customRequirements, setCustomRequirements] = useState('');
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [showAttribution, setShowAttribution] = useState(false);
   const [expandedFieldSummary, setExpandedFieldSummary] = useState(false);
 
-  // 生成图表洞察的辅助函数
+  // 解析AI洞察为结构化内容
+  const parseAIInsights = (aiText) => {
+    if (!aiText || typeof aiText !== 'string') return [];
+    
+    const sections = [];
+    const lines = aiText.split('\n').filter(line => line.trim());
+    
+    let currentSection = null;
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // 检测标题行（以 ## 开头）
+      if (trimmedLine.startsWith('##')) {
+        if (currentSection) {
+          sections.push(currentSection);
+        }
+        
+        const title = trimmedLine.replace(/^##\s*/, '');
+        let icon = '💡';
+        
+        // 根据标题内容选择合适的图标
+        if (title.includes('发现') || title.includes('洞察') || title.includes('关键')) {
+          icon = '🔍';
+        } else if (title.includes('建议') || title.includes('策略') || title.includes('推荐')) {
+          icon = '💡';
+        } else if (title.includes('竞争') || title.includes('市场') || title.includes('格局')) {
+          icon = '📊';
+        } else if (title.includes('表现') || title.includes('排行') || title.includes('业绩')) {
+          icon = '📈';
+        } else if (title.includes('趋势') || title.includes('预测') || title.includes('展望')) {
+          icon = '🔮';
+        }
+        
+        currentSection = {
+          title: title,
+          icon: icon,
+          content: []
+        };
+      }
+      // 检测列表项（以 - 开头）
+      else if (trimmedLine.startsWith('-')) {
+        const content = trimmedLine.replace(/^-\s*/, '');
+        if (currentSection) {
+          currentSection.content.push(content);
+        } else {
+          // 如果没有当前section，创建一个默认的
+          currentSection = {
+            title: '分析洞察',
+            icon: '📋',
+            content: [content]
+          };
+        }
+      }
+      // 其他内容行
+      else if (trimmedLine && currentSection) {
+        currentSection.content.push(trimmedLine);
+      }
+    }
+    
+    // 添加最后一个section
+    if (currentSection) {
+      sections.push(currentSection);
+    }
+    
+    // 如果没有解析到任何section，将整个文本作为一个section
+    if (sections.length === 0 && aiText.trim()) {
+      sections.push({
+        title: 'AI智能分析',
+        icon: '🤖',
+        content: [aiText.trim()]
+      });
+    }
+    
+    return sections;
+  };
   const getChartInsight = (chartData, analysisResult, index) => {
     const { type, title, data } = chartData;
     
@@ -99,6 +173,16 @@ const DataAnalysis = ({
       setSelectedSheet(firstSheet);
     }
   }, [sheetsData]);
+
+  // 监听文件切换，清空之前的分析结果
+  useEffect(() => {
+    // 当filename发生变化时（文件切换），清空之前的分析结果
+    setAnalysisResult(null);
+    setExpandedFieldSummary(false);
+    // 重置列选择
+    setSelectedColumns([]);
+    setCustomRequirements('');
+  }, [filename]);
 
   // Early return if required data is not available
   if (!sheetsData || typeof sheetsData !== 'object' || Object.keys(sheetsData).length === 0) {
@@ -765,23 +849,237 @@ const DataAnalysis = ({
             </Card>
           )}
 
+          {/* 结构化数据表格展示 */}
+          {analysisResult.data_tables && analysisResult.data_tables.length > 0 && (
+            <Card 
+              title={<><TableOutlined /> 数据分析结果</>}
+              style={{ marginBottom: 24 }}
+            >
+              <div style={{ marginBottom: 16 }}>
+                <Text type="secondary">
+                  以下是基于数据分析生成的结构化结果表格，包含实际的数值统计和排名信息：
+                </Text>
+              </div>
+              
+              {analysisResult.data_tables.map((table, index) => (
+                <div key={index} style={{ marginBottom: 24 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                      {table.title}
+                    </Text>
+                    {table.description && (
+                      <Text type="secondary" style={{ marginLeft: 16, fontSize: '13px' }}>
+                        {table.description}
+                      </Text>
+                    )}
+                  </div>
+                  
+                  {table.type === 'stats_table' && (
+                    <Table
+                      dataSource={table.data}
+                      pagination={false}
+                      size="small"
+                      scroll={{ x: true }}
+                      columns={[
+                        {
+                          title: '字段名',
+                          dataIndex: '字段名',
+                          key: '字段名',
+                          fixed: 'left',
+                          width: 120
+                        },
+                        {
+                          title: '数据类型',
+                          dataIndex: '数据类型',
+                          key: '数据类型',
+                          width: 100,
+                          render: (type) => {
+                            const color = {
+                              'numeric': 'blue',
+                              'categorical': 'green', 
+                              'text': 'orange',
+                              'datetime': 'purple'
+                            }[type] || 'default';
+                            return <Tag color={color}>{type}</Tag>
+                          }
+                        },
+                        {
+                          title: '有效记录数',
+                          dataIndex: '有效记录数',
+                          key: '有效记录数',
+                          width: 100
+                        },
+                        {
+                          title: '缺失率',
+                          dataIndex: '缺失率',
+                          key: '缺失率',
+                          width: 80
+                        },
+                        {
+                          title: '平均值',
+                          dataIndex: '平均值',
+                          key: '平均值',
+                          width: 100,
+                          render: (value) => value != null ? (typeof value === 'number' ? value.toFixed(2) : value) : '-'
+                        },
+                        {
+                          title: '中位数',
+                          dataIndex: '中位数',
+                          key: '中位数',
+                          width: 100,
+                          render: (value) => value != null ? (typeof value === 'number' ? value.toFixed(2) : value) : '-'
+                        },
+                        {
+                          title: '最小值',
+                          dataIndex: '最小值',
+                          key: '最小值',
+                          width: 100,
+                          render: (value) => value != null ? value : '-'
+                        },
+                        {
+                          title: '最大值',
+                          dataIndex: '最大值',
+                          key: '最大值',
+                          width: 100,
+                          render: (value) => value != null ? value : '-'
+                        },
+                        {
+                          title: '唯一值数量',
+                          dataIndex: '唯一值数量',
+                          key: '唯一值数量',
+                          width: 100,
+                          render: (value) => value != null ? value : '-'
+                        },
+                        {
+                          title: '最常见值',
+                          dataIndex: '最常见值',
+                          key: '最常见值',
+                          width: 120,
+                          render: (value) => value != null ? (
+                            <Text code style={{ fontSize: '12px' }}>{value}</Text>
+                          ) : '-'
+                        }
+                      ]}
+                    />
+                  )}
+                  
+                  {table.type === 'ranking_table' && (
+                    <Table
+                      dataSource={table.data}
+                      pagination={false}
+                      size="small"
+                      columns={[
+                        {
+                          title: '排名',
+                          dataIndex: '排名',
+                          key: '排名',
+                          width: 60,
+                          render: (rank) => (
+                            <Tag color={rank <= 3 ? 'gold' : 'default'}>
+                              #{rank}
+                            </Tag>
+                          )
+                        },
+                        {
+                          title: '值',
+                          dataIndex: '值',
+                          key: '值',
+                          ellipsis: true
+                        },
+                        {
+                          title: '出现次数',
+                          dataIndex: '出现次数',
+                          key: '出现次数',
+                          width: 100
+                        },
+                        {
+                          title: '占比',
+                          dataIndex: '占比',
+                          key: '占比',
+                          width: 80
+                        }
+                      ]}
+                    />
+                  )}
+                  
+                  {table.type === 'aggregation_table' && (
+                    <Table
+                      dataSource={table.data}
+                      pagination={false}
+                      size="small"
+                      columns={[
+                        {
+                          title: '字段',
+                          dataIndex: '字段',
+                          key: '字段'
+                        },
+                        {
+                          title: '统计类型',
+                          dataIndex: '统计类型',
+                          key: '统计类型',
+                          render: (type) => <Tag color="blue">{type}</Tag>
+                        },
+                        {
+                          title: '数值',
+                          dataIndex: '数值',
+                          key: '数值',
+                          render: (value) => (
+                            <Text strong style={{ color: '#1890ff' }}>
+                              {typeof value === 'number' ? value.toLocaleString() : value}
+                            </Text>
+                          )
+                        }
+                      ]}
+                    />
+                  )}
+                </div>
+              ))}
+            </Card>
+          )}
+
           {/* 综合分析报告 */}
           <Card 
             title={<><FileTextOutlined /> 专业分析报告</>}
             style={{ marginBottom: 24 }}
-            extra={
-              <Button 
-                type="primary"
-                icon={<FundOutlined />}
-                onClick={() => setShowAttribution(true)}
-              >
-                归因诊断
-              </Button>
-            }
           >
             {analysisResult.ai_insights ? (
-              <div style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 16, borderRadius: 6 }}>
-                {analysisResult.ai_insights}
+              <div>
+                {(() => {
+                  const parsedSections = parseAIInsights(analysisResult.ai_insights);
+                  
+                  if (parsedSections.length === 0) {
+                    return (
+                      <div style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 16, borderRadius: 6 }}>
+                        {analysisResult.ai_insights}
+                      </div>
+                    );
+                  }
+                  
+                  return parsedSections.map((section, index) => (
+                    <Card 
+                      key={index}
+                      size="small" 
+                      title={
+                        <Space>
+                          <span style={{ fontSize: '16px' }}>{section.icon}</span>
+                          <Text strong style={{ color: '#1890ff' }}>{section.title}</Text>
+                        </Space>
+                      }
+                      style={{ marginBottom: 16 }}
+                      bodyStyle={{ padding: '12px 16px' }}
+                    >
+                      <List
+                        size="small"
+                        dataSource={section.content}
+                        renderItem={item => (
+                          <List.Item style={{ padding: '4px 0', border: 'none' }}>
+                            <Text>{item}</Text>
+                          </List.Item>
+                        )}
+                      />
+                    </Card>
+                  ));
+                })()}
               </div>
             ) : (
               <div style={{ padding: 16, background: '#f0f2f5', borderRadius: 6 }}>
@@ -1065,23 +1363,6 @@ const DataAnalysis = ({
 
         </>
       )}
-
-      {/* 归因分析模态框 */}
-      <Modal
-        title="🔍 归因诊断分析"
-        open={showAttribution}
-        onCancel={() => setShowAttribution(false)}
-        footer={null}
-        width={1000}
-      >
-        <AttributionAnalysis 
-          filename={filename}
-          sheetName={selectedSheet}
-          availableColumns={availableColumns.filter(col => 
-            currentSheetData.columns[col].type === 'numeric'
-          )}
-        />
-      </Modal>
       </div>
     </>
   );

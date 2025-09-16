@@ -14,7 +14,13 @@ from excel_analysis_engine import (
     generate_practical_insights
 )
 
+# 导入新的智能分析系统
+from intelligent_analysis_system import IntelligentAnalysisEngine
+
 app = Flask(__name__)
+
+# 初始化智能分析引擎
+intelligent_engine = IntelligentAnalysisEngine()
 
 # 简单的CORS处理
 @app.after_request
@@ -325,6 +331,244 @@ def upload_file():
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_data():
+    """数据分析接口 - 简化版本"""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        sheet_name = data.get('sheet_name')
+        selected_columns = data.get('selected_columns', [])
+        analysis_level = data.get('analysis_level', '概览')
+        custom_requirements = data.get('custom_requirements', '')
+        
+        if not filename:
+            return jsonify({'error': '缺少文件名'}), 400
+        
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(filepath):
+            return jsonify({'error': '文件不存在'}), 400
+        
+        df = pd.read_excel(filepath, sheet_name=sheet_name or 0)
+        if selected_columns:
+            df = df[selected_columns]
+        
+        # 使用原有分析引擎避免复杂性
+        columns_info = {}
+        for col in df.columns:
+            col_data = df[col]
+            data_type = detect_data_type(col_data) 
+            columns_info[str(col)] = {'type': data_type, 'non_null_count': int(col_data.count()), 'total_count': len(col_data)}
+        
+        business_scenario = detect_business_scenario(df, columns_info)
+        key_fields = identify_key_fields(df, columns_info)
+        
+        # 让Gemini主导分析过程
+        gemini_analysis = {}
+        ai_insights = ""
+        ai_called = False
+        
+        try:
+            if API_KEY and API_KEY != "YOUR_API_KEY_HERE":
+                # 准备完整的数据给Gemini分析
+                data_summary = {
+                    "数据概览": {
+                        "总行数": len(df),
+                        "总列数": len(df.columns),
+                        "业务场景": business_scenario,
+                        "字段列表": list(df.columns)
+                    },
+                    "实际数据样本": df.head(15).to_dict('records'),
+                    "字段统计": {}
+                }
+                
+                # 添加每个字段的实际统计数据
+                for col in df.columns:
+                    col_data = df[col].dropna()
+                    if len(col_data) > 0:
+                        if col_data.dtype in ['int64', 'float64']:
+                            data_summary["字段统计"][col] = {
+                                "类型": "数值",
+                                "最大值": float(col_data.max()),
+                                "最小值": float(col_data.min()),
+                                "平均值": float(col_data.mean()),
+                                "中位数": float(col_data.median()),
+                                "总和": float(col_data.sum()),
+                                "样本值": col_data.head(8).tolist()
+                            }
+                        else:
+                            value_counts = col_data.value_counts().head(15)
+                            data_summary["字段统计"][col] = {
+                                "类型": "分类",
+                                "唯一值数量": len(col_data.unique()),
+                                "最常见值": value_counts.index[0] if len(value_counts) > 0 else None,
+                                "最常见值次数": int(value_counts.iloc[0]) if len(value_counts) > 0 else 0,
+                                "前15排名": {str(k): int(v) for k, v in value_counts.to_dict().items()}
+                            }
+                
+                # 构建智能分析提示词
+                prompt = f"""作为资深数据分析师，请基于以下真实数据进行专业分析。
+
+**核心要求：**
+1. 仔细观察数据特点，确定最有价值的分析角度
+2. 基于实际数据给出具体的发现和结论
+3. 提供针对性的业务洞察和建议
+4. 不要套用固定模板，要因数据而异
+
+**数据概览：**
+- 数据规模：{len(df)}行 x {len(df.columns)}列
+- 业务场景：{business_scenario}
+- 数据字段：{', '.join(df.columns)}
+
+**实际数据样本（前15行）：**
+{str(data_summary['实际数据样本'])}
+
+**字段统计信息：**
+{str(data_summary['字段统计'])}
+
+**分析任务：**
+请根据数据特点，选择最合适的分析角度：
+- 如果数据有明显的排名特征，重点分析TOP表现
+- 如果数据有分布特征，重点分析分布规律
+- 如果数据有对比维度，重点分析对比差异
+- 如果数据有趋势特征，重点分析变化趋势
+- 如果数据有异常特征，重点分析异常原因
+
+请按以下格式回答：
+
+## 数据特征观察
+- [观察到的数据特点1]
+- [观察到的数据特点2]
+- [观察到的数据特点3]
+
+## 分析角度选择
+- [选择的主要分析角度及原因]
+- [选择的次要分析角度及原因]
+
+## 关键发现
+- [基于实际数据的具体发现1]
+- [基于实际数据的具体发现2]
+- [基于实际数据的具体发现3]
+
+## 业务洞察
+- [具体的业务洞察1]
+- [具体的业务洞察2]
+
+## 行动建议
+- [具体的行动建议1]
+- [具体的行动建议2]
+"""
+                
+                body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+                response = requests.post(API_URL, headers=headers, json=body, timeout=30)
+                response.raise_for_status()
+                result = response.json()
+                ai_insights = result["candidates"][0]["content"]["parts"][0]["text"]
+                ai_called = True
+                
+                # 基于Gemini的分析结果，生成基础统计概览
+                basic_stats_overview = generate_basic_stats_overview(df, key_fields, business_scenario)
+                
+                # 生成数据表格用于前端展示
+                data_tables = []
+                
+                # 1. 字段统计表
+                field_stats_table = []
+                for field, stats in basic_stats_overview['field_summary'].items():
+                    row = {
+                        "字段名": field,
+                        "数据类型": stats['type'],
+                        "有效记录数": stats['non_null_count'],
+                        "缺失率": f"{stats['null_percentage']}%"
+                    }
+                    if stats['type'] == 'numeric':
+                        row.update({
+                            "平均值": stats.get('mean'),
+                            "中位数": stats.get('median'),
+                            "最小值": stats.get('min'),
+                            "最大值": stats.get('max')
+                        })
+                    elif stats['type'] == 'categorical':
+                        row.update({
+                            "唯一值数量": stats.get('unique_count'),
+                            "最常见值": stats.get('most_frequent'),
+                            "最常见值出现次数": stats.get('most_frequent_count')
+                        })
+                    field_stats_table.append(row)
+                
+                data_tables.append({
+                    "title": "字段统计分析表",
+                    "type": "stats_table",
+                    "data": field_stats_table,
+                    "description": f"共分析{len(field_stats_table)}个字段的基础统计信息"
+                })
+                
+                # 2. TOP排名表（基于Gemini分析的重点）
+                if basic_stats_overview['top_rankings']:
+                    for field, ranking in basic_stats_overview['top_rankings'].items():
+                        ranking_table = []
+                        for idx, (value, count) in enumerate(ranking['top_5'].items(), 1):
+                            ranking_table.append({
+                                "排名": idx,
+                                "值": value,
+                                "出现次数": count,
+                                "占比": f"{(count / df[field].count() * 100):.1f}%" if df[field].count() > 0 else "0%"
+                            })
+                        
+                        data_tables.append({
+                            "title": f"{field} TOP5排行榜",
+                            "type": "ranking_table",
+                            "data": ranking_table,
+                            "description": f"{field}字段的前5名统计"
+                        })
+                
+                # 简化的图表生成（基于实际数据特点）
+                charts = []
+                # 只有在数据确实适合图表展示时才生成
+                for field, ranking in basic_stats_overview.get('top_rankings', {}).items():
+                    if ranking and len(ranking['top_5']) > 1:
+                        chart_data = [{"name": name, "value": count} for name, count in list(ranking['top_5'].items())[:8]]
+                        charts.append({"type": "bar", "title": f"{field}分布", "data": chart_data})
+                        break  # 只生成一个最有代表性的图表
+                
+        except Exception as e:
+            ai_insights = f"AI分析服务暂时不可用: {str(e)}"
+            print(f"Gemini API调用失败: {e}")
+            # 使用简化的本地分析作为备选
+            basic_analysis = perform_excel_basic_analysis(df, key_fields)
+            basic_stats_overview = generate_basic_stats_overview(df, key_fields, business_scenario)
+            data_tables = []
+            charts = []
+        
+        # 返回结果
+        return jsonify(sanitize_for_json({
+            "status": "success",
+            "analysis_type": f"gemini_analysis_{analysis_level}",
+            "business_scenario": business_scenario,
+            "basic_stats_overview": basic_stats_overview,
+            "data_tables": data_tables,
+            "data_overview": {
+                "total_rows": len(df),
+                "total_columns": len(df.columns),
+                "key_fields": key_fields,
+                "missing_data": {col: df[col].isnull().sum() for col in df.columns if df[col].isnull().sum() > 0}
+            },
+            "ai_insights": ai_insights,
+            "charts": charts,
+            "recommendations": [
+                f"💡 基于Gemini智能分析，针对数据特点定制分析角度",
+                f"📊 根据实际数据给出的专业分析结论，避免模板化分析",
+                f"🔍 分析结果具有具体指导意义，可直接应用于业务决策"
+            ],
+            "ai_called": ai_called
+        }))
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"分析失败详细错误: {error_details}")
+        return jsonify({'error': f'分析失败: {str(e)}'}), 500
+
+@app.route('/api/analyze_legacy', methods=['POST'])
+def analyze_data_legacy():
     """数据分析接口"""
     try:
         data = request.get_json()
@@ -543,150 +787,6 @@ def analyze_data():
         
     except Exception as e:
         return jsonify({'error': f'分析失败: {str(e)}'}), 500
-
-@app.route('/api/attribution', methods=['POST'])
-def attribution_analysis():
-    """归因分析接口"""
-    try:
-        data = request.get_json()
-        
-        filename = data.get('filename')
-        sheet_name = data.get('sheet_name')
-        target_metric = data.get('target_metric')
-        available_columns = data.get('available_columns', [])
-        
-        if not all([filename, target_metric]):
-            return jsonify({'error': '缺少必要参数'}), 400
-        
-        # 读取文件
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        df = pd.read_excel(filepath, sheet_name=sheet_name or 0)
-        
-        if target_metric not in df.columns:
-            return jsonify({'error': f'目标指标 {target_metric} 不存在'}), 400
-        
-        # 生成列信息
-        columns_info = {}
-        for col in df.columns:
-            columns_info[col] = {'type': detect_data_type(df[col])}
-        
-        # 使用Excel分析引擎
-        key_fields = identify_key_fields(df, columns_info)
-        
-        # 执行深度分析
-        deep_analysis = perform_multi_dimensional_analysis(df, key_fields, "深度")
-        
-        # 计算简单的相关性分析
-        correlation_insights = []
-        if key_fields["数值字段"] and target_metric in key_fields["数值字段"]:
-            numeric_cols = [col for col in key_fields["数值字段"] if col != target_metric]
-            if numeric_cols:
-                target_data = df[target_metric].dropna()
-                for col in numeric_cols[:3]:  # 最多分析3个相关字段
-                    try:
-                        other_data = df[col].dropna()
-                        if len(target_data) > 1 and len(other_data) > 1:
-                            # 找到两个字段都有数据的行
-                            common_df = df[[target_metric, col]].dropna()
-                            if len(common_df) > 1:
-                                corr = common_df[target_metric].corr(common_df[col])
-                                if not pd.isna(corr) and abs(corr) > 0.3:
-                                    strength = "强" if abs(corr) > 0.6 else "中等"
-                                    direction = "正相关" if corr > 0 else "负相关"
-                                    correlation_insights.append(f"📊 {col} 与 {target_metric} 呈{strength}{direction} (相关系数: {corr:.3f})")
-                    except:
-                        continue
-        
-        # 分类字段影响分析
-        category_insights = []
-        if key_fields["分类字段"] and target_metric in df.columns:
-            for cat_field in key_fields["分类字段"][:2]:
-                try:
-                    df_clean = df[[cat_field, target_metric]].dropna()
-                    if len(df_clean) > 0:
-                        grouped = df_clean.groupby(cat_field)[target_metric].mean().sort_values(ascending=False)
-                        if len(grouped) > 1:
-                            best_category = grouped.index[0]
-                            worst_category = grouped.index[-1]
-                            best_value = grouped.iloc[0]
-                            worst_value = grouped.iloc[-1]
-                            
-                            if best_value > worst_value:
-                                diff_ratio = ((best_value - worst_value) / worst_value) * 100
-                                category_insights.append(f"🎯 {cat_field}中，{best_category}的{target_metric}比{worst_category}高{diff_ratio:.1f}%")
-                except:
-                    continue
-        
-        # 尝试调用Gemini获取AI归因分析（直连Google API）
-        ai_attribution = ""
-        try:
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if not api_key:
-                raise Exception("缺少 GEMINI_API_KEY 环境变量")
-
-            prompt_header = (
-                f"你是一位资深数据分析师。请围绕目标指标『{target_metric}』做归因诊断，"
-                "输出结构化中文内容：1) 指标概览(均值/方差/分布形态)；2) 可能驱动因素(按强弱排序，标注正/负影响)；"
-                "3) 关键分类维度差异(TOP-N与长尾)；4) 异常与波动原因(数据/业务/外部)与验证思路；"
-                "5) 可执行改进建议(优先级与预期影响)，并给出需持续监控的指标清单。"
-            )
-            payload_text = {
-                "columns": list(df.columns),
-                "numeric_preview": df.select_dtypes(include=['number']).head(3).to_dict('records'),
-                "target_metric": target_metric,
-                "key_fields": key_fields,
-                "deep_analysis": deep_analysis
-            }
-
-            body = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"text": prompt_header},
-                            {"text": json.dumps(payload_text, ensure_ascii=False)}
-                        ]
-                    }
-                ]
-            }
-
-            headers = {
-                "Content-Type": "application/json",
-                "X-goog-api-key": api_key
-            }
-
-            resp = requests.post(GEMINI_API_URL, headers=headers, json=body, timeout=60)
-            resp.raise_for_status()
-            res_json = resp.json()
-            try:
-                ai_attribution = res_json["candidates"][0]["content"]["parts"][0]["text"]
-            except Exception:
-                ai_attribution = ""
-        except Exception as e:
-            print(f"调用Gemini归因分析失败: {e}")
-            ai_attribution = "AI归因分析服务暂时不可用。"
-        
-        # 组合所有洞察
-        all_insights = correlation_insights + category_insights
-        if not all_insights:
-            all_insights = [f"📋 已完成{target_metric}的影响因素分析"]
-        
-        return jsonify({
-            "status": "success",
-            "target_metric": target_metric,
-            "attribution_analysis": ai_attribution,
-            "key_drivers": all_insights,
-            "recommendations": [
-                "🔍 重点关注相关性较强的影响因素",
-                "📊 建议按不同维度深入分析差异原因", 
-                "💡 制定针对性的改进措施",
-                "📈 建立关键指标的监控体系"
-            ],
-            "deep_analysis": deep_analysis
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'归因分析失败: {str(e)}'}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

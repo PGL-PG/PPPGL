@@ -11,9 +11,9 @@ def safe_convert_value(value):
         return None
     elif isinstance(value, (bool, np.bool_)):
         return bool(value)
-    elif isinstance(value, (np.integer, np.int64, np.int32)):
+    elif isinstance(value, (np.integer,)):
         return int(value)
-    elif isinstance(value, (np.floating, np.float64, np.float32)):
+    elif isinstance(value, (np.floating,)):
         return float(value)
     elif isinstance(value, (pd.Timestamp, pd.Timedelta)):
         return str(value)
@@ -21,42 +21,48 @@ def safe_convert_value(value):
         return value
 
 def detect_business_scenario(df, columns_info):
-    """智能识别业务场景"""
+    """智能识别业务场景 - 像资深分析师一样思考"""
     all_columns = [col.lower() for col in df.columns]
     column_text = " ".join(all_columns)
     
-    # 业务场景关键词
+    # 数据观察者模式：基于字段组合智能识别场景
     scenarios = {
-        "销售分析": {
-            "keywords": ["销售", "销量", "营收", "收入", "业绩", "成交", "订单", "客户"],
-            "priority": 0
+        "电商数据分析": {
+            "patterns": ["商品", "品牌", "销量", "价格", "类别", "sku", "订单"],
+            "indicators": ["销售额", "销量", "单价", "gmv"],
+            "score": 0
         },
-        "产品分析": {
-            "keywords": ["产品", "商品", "型号", "品牌", "类别", "库存", "价格"],
-            "priority": 0
+        "汽车销售分析": {
+            "patterns": ["车型", "品牌", "型号", "销量", "价格", "排量", "配置"],
+            "indicators": ["销量", "售价", "销售额"],
+            "score": 0
         },
-        "财务分析": {
-            "keywords": ["成本", "利润", "费用", "支出", "预算", "财务", "资金"],
-            "priority": 0
+        "市场竞争分析": {
+            "patterns": ["品牌", "市场份额", "竞品", "排名", "占有率"],
+            "indicators": ["份额", "排名", "增长率"],
+            "score": 0
         },
-        "人员分析": {
-            "keywords": ["员工", "人员", "部门", "岗位", "工资", "薪酬", "考勤"],
-            "priority": 0
+        "客户行为分析": {
+            "patterns": ["用户", "客户", "行为", "偏好", "年龄", "性别", "地区"],
+            "indicators": ["活跃度", "转化率", "留存率"],
+            "score": 0
         },
-        "时间分析": {
-            "keywords": ["日期", "时间", "年", "月", "季度", "周"],
-            "priority": 0
+        "财务业绩分析": {
+            "patterns": ["收入", "成本", "利润", "费用", "预算", "roi"],
+            "indicators": ["营收", "毛利", "净利润"],
+            "score": 0
         }
     }
     
-    # 计算每个场景的匹配度
-    for scenario, info in scenarios.items():
-        match_count = sum(1 for keyword in info["keywords"] if keyword in column_text)
-        scenarios[scenario]["priority"] = match_count
+    # 智能匹配：模式识别 + 权重计算
+    for scenario, config in scenarios.items():
+        pattern_matches = sum(2 for pattern in config["patterns"] if pattern in column_text)
+        indicator_matches = sum(3 for indicator in config["indicators"] if indicator in column_text)
+        scenarios[scenario]["score"] = pattern_matches + indicator_matches
     
-    # 返回匹配度最高的场景
-    best_scenario = max(scenarios.items(), key=lambda x: x[1]["priority"])
-    return best_scenario[0] if best_scenario[1]["priority"] > 0 else "通用分析"
+    # 返回最佳匹配场景
+    best_scenario = max(scenarios.items(), key=lambda x: x[1]["score"])
+    return best_scenario[0] if best_scenario[1]["score"] > 2 else "商业数据分析"
 
 def identify_key_fields(df, columns_info):
     """智能识别关键业务字段"""
@@ -323,7 +329,7 @@ def perform_deep_analysis(df, key_fields):
         try:
             df_clean = df[[cat1, cat2, num_field]].dropna()
             cross_table = pd.crosstab(df_clean[cat1], df_clean[cat2], 
-                                    values=df_clean[num_field], aggfunc='sum', fill_value=0)
+                                    values=df_clean[num_field], aggfunc='sum').fillna(0)
             
             # 找出最大值组合
             max_value = 0
