@@ -14,13 +14,10 @@ from excel_analysis_engine import (
     generate_practical_insights
 )
 
-# 导入新的智能分析系统
-from intelligent_analysis_system import IntelligentAnalysisEngine
+# 导入增强版分析API
+from enhanced_analysis_api import enhanced_analyze_data
 
 app = Flask(__name__)
-
-# 初始化智能分析引擎
-intelligent_engine = IntelligentAnalysisEngine()
 
 # 简单的CORS处理
 @app.after_request
@@ -45,6 +42,407 @@ headers = {
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = None  # 移除文件大小限制
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def generate_intelligent_charts(df, basic_stats_overview, ai_insights, data_summary):
+    """基于数据特征直接生成有意义的可视化图表"""
+    charts = []
+    
+    try:
+        # 基于数据特征智能生成图表
+        charts = create_charts_from_data_analysis(df, basic_stats_overview, data_summary)
+                
+    except Exception as e:
+        print(f"智能图表生成失败: {e}")
+        # 备用方案：使用简化图表生成
+        charts = generate_fallback_charts(df, basic_stats_overview)
+    
+    return charts
+
+def create_charts_from_data_analysis(df, basic_stats_overview, data_summary):
+    """直接基于数据分析创建有价值的图表"""
+    charts = []
+    
+    # 1. 分析数据结构，识别有意义的维度
+    field_analysis = analyze_field_characteristics(df)
+    
+    # 2. 按优先级生成图表
+    
+    # 优先级1：排行榜类图表（分类字段 x 数值字段）
+    if field_analysis['categorical_fields'] and field_analysis['numeric_fields']:
+        for cat_field in field_analysis['categorical_fields'][:2]:  # 最多2个分类字段
+            for num_field in field_analysis['numeric_fields'][:1]:  # 主要数值字段
+                chart = create_ranking_chart(df, cat_field, num_field)
+                if chart:
+                    charts.append(chart)
+                    break
+            if charts:  # 每个分类字段只生成一个图表
+                break
+    
+    # 优先级2：分布类图表（占比分析）
+    if field_analysis['categorical_fields'] and len(charts) < 3:
+        for cat_field in field_analysis['categorical_fields'][:2]:
+            chart = create_distribution_chart(df, cat_field)
+            if chart:
+                charts.append(chart)
+                break
+    
+    # 优先级3：相关性分析（数值字段间）
+    if len(field_analysis['numeric_fields']) >= 2 and len(charts) < 3:
+        chart = create_correlation_chart(df, field_analysis['numeric_fields'][:2])
+        if chart:
+            charts.append(chart)
+    
+    # 优先级4：时间趋势分析
+    if field_analysis['time_fields'] and field_analysis['numeric_fields'] and len(charts) < 4:
+        chart = create_trend_chart(df, field_analysis['time_fields'][0], field_analysis['numeric_fields'][0])
+        if chart:
+            charts.append(chart)
+    
+    return charts[:4]  # 最多返回4个图表
+
+def analyze_field_characteristics(df):
+    """分析字段特征，识别不同类型的字段"""
+    analysis = {
+        'numeric_fields': [],
+        'categorical_fields': [],
+        'time_fields': [],
+        'text_fields': []
+    }
+    
+    for col in df.columns:
+        col_data = pd.Series(df[col]).dropna()
+        if len(col_data) == 0:
+            continue
+            
+        # 数值字段
+        if pd.api.types.is_numeric_dtype(col_data):
+            analysis['numeric_fields'].append(col)
+            
+        # 时间字段
+        elif pd.api.types.is_datetime64_any_dtype(col_data):
+            analysis['time_fields'].append(col)
+            
+        # 分类字段（低基数比）
+        else:
+            unique_ratio = len(col_data.unique()) / len(col_data)
+            unique_count = len(col_data.unique())
+            
+            if unique_ratio < 0.5 and unique_count < 30:  # 适合做分类的数据
+                analysis['categorical_fields'].append(col)
+            else:
+                analysis['text_fields'].append(col)
+    
+    return analysis
+
+def create_ranking_chart(df, cat_field, num_field):
+    """创建排行榜图表"""
+    try:
+        # 按分类字段分组，计算数值字段的总和
+        grouped = df.groupby(cat_field)[num_field].sum().sort_values(ascending=False)
+        
+        if len(grouped) < 2:  # 数据太少，不适合做图表
+            return None
+            
+        # 取前10名
+        top_data = grouped.head(10)
+        chart_data = [{'name': str(name), 'value': float(value)} for name, value in top_data.items()]
+        
+        return {
+            'type': 'bar',
+            'title': f'{cat_field} {num_field} 排行榜',
+            'data': chart_data,
+            'subtitle': f'展示 {cat_field} 在 {num_field} 上的表现排名，{top_data.index[0]} 排名第一'
+        }
+    except Exception as e:
+        return None
+
+def create_distribution_chart(df, cat_field):
+    """创建分布图表"""
+    try:
+        # 计算各类别的数量和占比
+        value_counts = df[cat_field].value_counts()
+        
+        if len(value_counts) < 2:  # 数据太少
+            return None
+            
+        # 取前8个类别
+        top_values = value_counts.head(8)
+        total = top_values.sum()
+        
+        chart_data = []
+        for name, count in top_values.items():
+            percentage = (count / total * 100) if total > 0 else 0
+            chart_data.append({'name': str(name), 'value': round(percentage, 1)})
+        
+        return {
+            'type': 'pie',
+            'title': f'{cat_field} 分布情况',
+            'data': chart_data,
+            'subtitle': f'{cat_field} 的分布情况，{top_values.index[0]} 占比最高 ({chart_data[0]["value"]}%)'
+        }
+    except Exception as e:
+        return None
+
+def create_correlation_chart(df, numeric_fields):
+    """创建相关性散点图"""
+    try:
+        field1, field2 = numeric_fields[0], numeric_fields[1]
+        
+        # 获取清洁数据
+        clean_data = df[[field1, field2]].dropna()
+        
+        if len(clean_data) < 10:  # 数据太少
+            return None
+            
+        # 限制数据点数量避免性能问题
+        sample_data = clean_data.sample(min(100, len(clean_data)))
+        
+        chart_data = [[float(row[field1]), float(row[field2])] for _, row in sample_data.iterrows()]
+        
+        # 计算相关性
+        correlation = clean_data[field1].corr(clean_data[field2])
+        
+        return {
+            'type': 'scatter',
+            'title': f'{field1} vs {field2} 相关性',
+            'data': chart_data,
+            'subtitle': f'{field1} 和 {field2} 的相关性为 {correlation:.3f}，显示了两者间的关联性'
+        }
+    except Exception as e:
+        return None
+
+def create_trend_chart(df, time_field, num_field):
+    """创建时间趋势图"""
+    try:
+        # 处理时间数据
+        time_data = df[[time_field, num_field]].copy()
+        time_data[time_field] = pd.to_datetime(time_data[time_field], errors='coerce')
+        time_data = time_data.dropna()
+        
+        if len(time_data) < 3:  # 数据太少
+            return None
+            
+        # 按时间排序并聚合
+        time_data = time_data.sort_values(time_field)
+        
+        # 按天或月聚合（根据数据量决定）
+        if len(time_data) > 50:
+            # 数据较多，按月聚合
+            grouped = time_data.groupby(time_data[time_field].dt.to_period('M'))[num_field].sum()
+        else:
+            # 数据较少，按天聚合
+            grouped = time_data.groupby(time_data[time_field].dt.date)[num_field].sum()
+        
+        chart_data = [float(value) for value in grouped.values]
+        
+        return {
+            'type': 'line',
+            'title': f'{num_field} 时间趋势',
+            'data': chart_data,
+            'subtitle': f'{num_field} 随时间的变化趋势，共 {len(chart_data)} 个时间点'
+        }
+    except Exception as e:
+        return None
+
+def extract_chart_recommendations_from_ai(ai_insights, columns):
+    """从 AI 分析结果中提取可视化推荐"""
+    recommendations = []
+    
+    if not ai_insights or not isinstance(ai_insights, str):
+        return recommendations
+    
+    # 尝试从 AI 回复中解析可视化推荐
+    lines = ai_insights.split('\n')
+    current_recommendation = {}
+    in_chart_section = False
+    
+    for line in lines:
+        line = line.strip()
+        
+        # 检测可视化推荐区域
+        if '智能可视化推荐' in line or '推荐图表' in line:
+            in_chart_section = True
+            continue
+            
+        if not in_chart_section:
+            continue
+            
+        # 检测新的推荐项
+        if '推荐图表' in line and '：' in line:
+            if current_recommendation:
+                recommendations.append(current_recommendation)
+            current_recommendation = {
+                'type': extract_chart_type_from_line(line),
+                'title': line.split('：')[1].strip() if '：' in line else ''
+            }
+        
+        # 提取字段信息
+        elif '维度字段' in line and current_recommendation:
+            current_recommendation['dimension_field'] = extract_field_from_line(line, columns)
+        elif '度量字段' in line and current_recommendation:
+            current_recommendation['measure_field'] = extract_field_from_line(line, columns)
+        elif '推荐理由' in line and current_recommendation:
+            current_recommendation['reason'] = line.split('：')[1].strip() if '：' in line else ''
+        elif '预期洞察' in line and current_recommendation:
+            current_recommendation['insight'] = line.split('：')[1].strip() if '：' in line else ''
+    
+    # 添加最后一个推荐
+    if current_recommendation:
+        recommendations.append(current_recommendation)
+    
+    return recommendations
+
+def extract_chart_type_from_line(line):
+    """从文本行中提取图表类型"""
+    line_lower = line.lower()
+    if '柱状图' in line or 'bar' in line_lower:
+        return 'bar'
+    elif '饼图' in line or 'pie' in line_lower:
+        return 'pie'
+    elif '折线图' in line or 'line' in line_lower:
+        return 'line'
+    elif '散点图' in line or 'scatter' in line_lower:
+        return 'scatter'
+    elif '热力图' in line or 'heatmap' in line_lower:
+        return 'heatmap'
+    else:
+        return 'bar'  # 默认类型
+
+def extract_field_from_line(line, columns):
+    """从文本行中提取字段名"""
+    if '：' in line:
+        field_part = line.split('：')[1].strip()
+        # 查找匹配的字段名
+        for col in columns:
+            if col in field_part:
+                return col
+    return None
+
+def generate_default_chart_recommendations(df, basic_stats_overview):
+    """生成默认的图表推荐"""
+    recommendations = []
+    
+    # 检测数值字段和分类字段
+    numeric_fields = []
+    categorical_fields = []
+    
+    for col in df.columns:
+        col_data = df[col].dropna()
+        if len(col_data) == 0:
+            continue
+            
+        if pd.api.types.is_numeric_dtype(df[col]):
+            numeric_fields.append(col)
+        else:
+            unique_ratio = len(col_data.unique()) / len(col_data)
+            if unique_ratio < 0.5 and len(col_data.unique()) < 20:
+                categorical_fields.append(col)
+    
+    # 推荐 1：柱状图（分类 × 数值）
+    if categorical_fields and numeric_fields:
+        recommendations.append({
+            'type': 'bar',
+            'title': f'{categorical_fields[0]} {numeric_fields[0]} 排行榜',
+            'dimension_field': categorical_fields[0],
+            'measure_field': numeric_fields[0],
+            'reason': '数据包含分类和数值字段，适合做排名对比',
+            'insight': f'能够明确显示不同{categorical_fields[0]}在{numeric_fields[0]}上的表现差异'
+        })
+    
+    # 推荐 2：饼图（分类字段的分布）
+    if categorical_fields:
+        recommendations.append({
+            'type': 'pie',
+            'title': f'{categorical_fields[0]} 分布占比',
+            'dimension_field': categorical_fields[0],
+            'measure_field': None,
+            'reason': f'{categorical_fields[0]} 字段分类明确，适合显示占比分布',
+            'insight': f'可以直观显示各{categorical_fields[0]}的市场份额或分布情况'
+        })
+    
+    # 推荐 3：散点图（数值字段间的相关性）
+    if len(numeric_fields) >= 2:
+        recommendations.append({
+            'type': 'scatter',
+            'title': f'{numeric_fields[0]} vs {numeric_fields[1]} 相关性',
+            'dimension_field': numeric_fields[0],
+            'measure_field': numeric_fields[1],
+            'reason': '多个数值字段间可能存在相关关系',
+            'insight': f'能够发现{numeric_fields[0]}和{numeric_fields[1]}之间的潜在关联性'
+        })
+    
+    return recommendations
+
+def create_chart_from_recommendation(df, recommendation):
+    """根据推荐创建实际图表数据"""
+    try:
+        chart_type = recommendation.get('type', 'bar')
+        dimension_field = recommendation.get('dimension_field')
+        measure_field = recommendation.get('measure_field')
+        title = recommendation.get('title', '数据图表')
+        
+        if chart_type == 'bar' and dimension_field and measure_field:
+            # 柱状图：按维度字段分组，求和度量字段
+            grouped = df.groupby(dimension_field)[measure_field].sum().sort_values(ascending=False)
+            chart_data = [{'name': str(name), 'value': float(value)} for name, value in grouped.head(10).items()]
+            
+        elif chart_type == 'pie' and dimension_field:
+            # 饼图：显示维度字段的分布
+            if measure_field:
+                grouped = df.groupby(dimension_field)[measure_field].sum().sort_values(ascending=False)
+            else:
+                grouped = df[dimension_field].value_counts()
+            
+            total = grouped.sum()
+            chart_data = []
+            for name, value in grouped.head(8).items():
+                percentage = (value / total * 100) if total > 0 else 0
+                chart_data.append({'name': str(name), 'value': round(percentage, 1)})
+                
+        elif chart_type == 'scatter' and dimension_field and measure_field:
+            # 散点图：两个数值字段的相关性
+            clean_data = df[[dimension_field, measure_field]].dropna()
+            chart_data = [[float(row[dimension_field]), float(row[measure_field])] 
+                         for _, row in clean_data.head(100).iterrows()]
+                         
+        elif chart_type == 'line' and dimension_field and measure_field:
+            # 折线图：时间趋势或有序列数据
+            grouped = df.groupby(dimension_field)[measure_field].sum().sort_index()
+            chart_data = [float(value) for value in grouped.values]
+            
+        else:
+            return None
+        
+        return {
+            'type': chart_type,
+            'title': title,
+            'data': chart_data,
+            'subtitle': recommendation.get('insight', f'{title} 提供了重要的数据洞察'),
+            'dimension_field': dimension_field,
+            'measure_field': measure_field
+        }
+        
+    except Exception as e:
+        print(f"创建图表失败: {e}")
+        return None
+
+def generate_fallback_charts(df, basic_stats_overview):
+    """备用图表生成方案"""
+    charts = []
+    
+    # 简化的图表生成（基于实际数据特点）
+    for field, ranking in basic_stats_overview.get('top_rankings', {}).items():
+        if ranking and len(ranking['top_5']) > 1:
+            chart_data = [{'name': name, 'value': count} for name, count in list(ranking['top_5'].items())[:8]]
+            charts.append({
+                'type': 'bar', 
+                'title': f'{field} 分布', 
+                'data': chart_data,
+                'subtitle': f'{field} 的分布情况一目了然'
+            })
+            break  # 只生成一个最有代表性的图表
+    
+    return charts
 
 def sanitize_for_json(obj):
     """递归将对象中的numpy/pandas类型转为原生Python，确保可JSON序列化"""
@@ -277,7 +675,7 @@ def upload_file():
         if file.filename == '':
             return jsonify({'error': '没有选择文件'}), 400
         
-        if file and allowed_file(file.filename):
+        if file and file.filename and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
@@ -352,214 +750,10 @@ def analyze_data():
             df = df[selected_columns]
         
         # 使用原有分析引擎避免复杂性
-        columns_info = {}
-        for col in df.columns:
-            col_data = df[col]
-            data_type = detect_data_type(col_data) 
-            columns_info[str(col)] = {'type': data_type, 'non_null_count': int(col_data.count()), 'total_count': len(col_data)}
+        # 使用新的增强版分析系统
+        analysis_result = enhanced_analyze_data(df, custom_requirements)
         
-        business_scenario = detect_business_scenario(df, columns_info)
-        key_fields = identify_key_fields(df, columns_info)
-        
-        # 让Gemini主导分析过程
-        gemini_analysis = {}
-        ai_insights = ""
-        ai_called = False
-        
-        try:
-            if API_KEY and API_KEY != "YOUR_API_KEY_HERE":
-                # 准备完整的数据给Gemini分析
-                data_summary = {
-                    "数据概览": {
-                        "总行数": len(df),
-                        "总列数": len(df.columns),
-                        "业务场景": business_scenario,
-                        "字段列表": list(df.columns)
-                    },
-                    "实际数据样本": df.head(15).to_dict('records'),
-                    "字段统计": {}
-                }
-                
-                # 添加每个字段的实际统计数据
-                for col in df.columns:
-                    col_data = df[col].dropna()
-                    if len(col_data) > 0:
-                        if col_data.dtype in ['int64', 'float64']:
-                            data_summary["字段统计"][col] = {
-                                "类型": "数值",
-                                "最大值": float(col_data.max()),
-                                "最小值": float(col_data.min()),
-                                "平均值": float(col_data.mean()),
-                                "中位数": float(col_data.median()),
-                                "总和": float(col_data.sum()),
-                                "样本值": col_data.head(8).tolist()
-                            }
-                        else:
-                            value_counts = col_data.value_counts().head(15)
-                            data_summary["字段统计"][col] = {
-                                "类型": "分类",
-                                "唯一值数量": len(col_data.unique()),
-                                "最常见值": value_counts.index[0] if len(value_counts) > 0 else None,
-                                "最常见值次数": int(value_counts.iloc[0]) if len(value_counts) > 0 else 0,
-                                "前15排名": {str(k): int(v) for k, v in value_counts.to_dict().items()}
-                            }
-                
-                # 构建智能分析提示词
-                prompt = f"""作为资深数据分析师，请基于以下真实数据进行专业分析。
-
-**核心要求：**
-1. 仔细观察数据特点，确定最有价值的分析角度
-2. 基于实际数据给出具体的发现和结论
-3. 提供针对性的业务洞察和建议
-4. 不要套用固定模板，要因数据而异
-
-**数据概览：**
-- 数据规模：{len(df)}行 x {len(df.columns)}列
-- 业务场景：{business_scenario}
-- 数据字段：{', '.join(df.columns)}
-
-**实际数据样本（前15行）：**
-{str(data_summary['实际数据样本'])}
-
-**字段统计信息：**
-{str(data_summary['字段统计'])}
-
-**分析任务：**
-请根据数据特点，选择最合适的分析角度：
-- 如果数据有明显的排名特征，重点分析TOP表现
-- 如果数据有分布特征，重点分析分布规律
-- 如果数据有对比维度，重点分析对比差异
-- 如果数据有趋势特征，重点分析变化趋势
-- 如果数据有异常特征，重点分析异常原因
-
-请按以下格式回答：
-
-## 数据特征观察
-- [观察到的数据特点1]
-- [观察到的数据特点2]
-- [观察到的数据特点3]
-
-## 分析角度选择
-- [选择的主要分析角度及原因]
-- [选择的次要分析角度及原因]
-
-## 关键发现
-- [基于实际数据的具体发现1]
-- [基于实际数据的具体发现2]
-- [基于实际数据的具体发现3]
-
-## 业务洞察
-- [具体的业务洞察1]
-- [具体的业务洞察2]
-
-## 行动建议
-- [具体的行动建议1]
-- [具体的行动建议2]
-"""
-                
-                body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
-                response = requests.post(API_URL, headers=headers, json=body, timeout=30)
-                response.raise_for_status()
-                result = response.json()
-                ai_insights = result["candidates"][0]["content"]["parts"][0]["text"]
-                ai_called = True
-                
-                # 基于Gemini的分析结果，生成基础统计概览
-                basic_stats_overview = generate_basic_stats_overview(df, key_fields, business_scenario)
-                
-                # 生成数据表格用于前端展示
-                data_tables = []
-                
-                # 1. 字段统计表
-                field_stats_table = []
-                for field, stats in basic_stats_overview['field_summary'].items():
-                    row = {
-                        "字段名": field,
-                        "数据类型": stats['type'],
-                        "有效记录数": stats['non_null_count'],
-                        "缺失率": f"{stats['null_percentage']}%"
-                    }
-                    if stats['type'] == 'numeric':
-                        row.update({
-                            "平均值": stats.get('mean'),
-                            "中位数": stats.get('median'),
-                            "最小值": stats.get('min'),
-                            "最大值": stats.get('max')
-                        })
-                    elif stats['type'] == 'categorical':
-                        row.update({
-                            "唯一值数量": stats.get('unique_count'),
-                            "最常见值": stats.get('most_frequent'),
-                            "最常见值出现次数": stats.get('most_frequent_count')
-                        })
-                    field_stats_table.append(row)
-                
-                data_tables.append({
-                    "title": "字段统计分析表",
-                    "type": "stats_table",
-                    "data": field_stats_table,
-                    "description": f"共分析{len(field_stats_table)}个字段的基础统计信息"
-                })
-                
-                # 2. TOP排名表（基于Gemini分析的重点）
-                if basic_stats_overview['top_rankings']:
-                    for field, ranking in basic_stats_overview['top_rankings'].items():
-                        ranking_table = []
-                        for idx, (value, count) in enumerate(ranking['top_5'].items(), 1):
-                            ranking_table.append({
-                                "排名": idx,
-                                "值": value,
-                                "出现次数": count,
-                                "占比": f"{(count / df[field].count() * 100):.1f}%" if df[field].count() > 0 else "0%"
-                            })
-                        
-                        data_tables.append({
-                            "title": f"{field} TOP5排行榜",
-                            "type": "ranking_table",
-                            "data": ranking_table,
-                            "description": f"{field}字段的前5名统计"
-                        })
-                
-                # 简化的图表生成（基于实际数据特点）
-                charts = []
-                # 只有在数据确实适合图表展示时才生成
-                for field, ranking in basic_stats_overview.get('top_rankings', {}).items():
-                    if ranking and len(ranking['top_5']) > 1:
-                        chart_data = [{"name": name, "value": count} for name, count in list(ranking['top_5'].items())[:8]]
-                        charts.append({"type": "bar", "title": f"{field}分布", "data": chart_data})
-                        break  # 只生成一个最有代表性的图表
-                
-        except Exception as e:
-            ai_insights = f"AI分析服务暂时不可用: {str(e)}"
-            print(f"Gemini API调用失败: {e}")
-            # 使用简化的本地分析作为备选
-            basic_analysis = perform_excel_basic_analysis(df, key_fields)
-            basic_stats_overview = generate_basic_stats_overview(df, key_fields, business_scenario)
-            data_tables = []
-            charts = []
-        
-        # 返回结果
-        return jsonify(sanitize_for_json({
-            "status": "success",
-            "analysis_type": f"gemini_analysis_{analysis_level}",
-            "business_scenario": business_scenario,
-            "basic_stats_overview": basic_stats_overview,
-            "data_tables": data_tables,
-            "data_overview": {
-                "total_rows": len(df),
-                "total_columns": len(df.columns),
-                "key_fields": key_fields,
-                "missing_data": {col: df[col].isnull().sum() for col in df.columns if df[col].isnull().sum() > 0}
-            },
-            "ai_insights": ai_insights,
-            "charts": charts,
-            "recommendations": [
-                f"💡 基于Gemini智能分析，针对数据特点定制分析角度",
-                f"📊 根据实际数据给出的专业分析结论，避免模板化分析",
-                f"🔍 分析结果具有具体指导意义，可直接应用于业务决策"
-            ],
-            "ai_called": ai_called
-        }))
+        return jsonify(analysis_result)
         
     except Exception as e:
         import traceback
@@ -599,14 +793,21 @@ def analyze_data_legacy():
         # 生成列信息
         columns_info = {}
         for col in df.columns:
-            col_data = df[col]
-            data_type = detect_data_type(col_data)
-            columns_info[str(col)] = {
-                'type': data_type,
-                'non_null_count': int(col_data.count()),
-                'total_count': len(col_data)
-            }
-        
+            try:
+                col_series = pd.Series(df[col])
+                data_type = detect_data_type(col_series)
+                columns_info[str(col)] = {
+                    'type': data_type,
+                    'non_null_count': int(col_series.count()),
+                    'total_count': len(col_series)
+                }
+            except Exception:
+                columns_info[str(col)] = {
+                    'type': 'error',
+                    'non_null_count': 0,
+                    'total_count': len(df)
+                }
+
         # 使用Excel分析引擎
         business_scenario = detect_business_scenario(df, columns_info)
         key_fields = identify_key_fields(df, columns_info)

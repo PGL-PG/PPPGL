@@ -10,7 +10,7 @@ export const API_CONFIG = {
   GEMINI_SERVICE: 'http://localhost:8000',
   
   // 使用哪个后端 (true=优化版, false=原版)
-  USE_OPTIMIZED: true
+  USE_OPTIMIZED: false
 };
 
 // 获取当前使用的API基础URL

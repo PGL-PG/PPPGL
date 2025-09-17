@@ -1,55 +1,127 @@
-# AI Excel 数据分析助手
+# Excel 智能分析系统
 
-一个集成 Gemini AI 的智能 Excel 数据分析工具，支持命令行简化版和Web界面完整版两种使用方式。
+一个集成 Gemini AI 的智能 Excel 数据分析工具，具备智能场景匹配和精准提示词生成能力。
 
-## ✨ 功能特色
+## ✨ 核心功能
 
-- **智能分析**: 基于 Gemini 2.0 Flash 模型的专业数据分析
-- **直接调用**: 无复杂架构，直接调用Gemini API
-- **多种使用方式**: 命令行简化版和Web界面完整版
-- **自动识别**: 智能识别业务字段（销量、品牌、产品、价格等）
-- **可视化图表**: 自动生成排行榜、饼图、趋势图等
-- **专业洞察**: 提供具体的业务分析结果和建议
-- **基础数据概览**: 采用文本形式展示，简洁清晰
+### 智能场景匹配
+- **多维度数据指纹分析**: 基于字段特征、内容特征、统计特征和语义特征
+- **相似度匹配算法**: 精确识别电商、汽车、财务等业务场景
+- **场景置信度计算**: 提供匹配结果的可信度评估
+
+### 场景化提示词引擎
+- **专业化提示词模板**: 针对不同场景生成专业化的 Gemini 提示词
+- **上下文感知分析**: 根据数据特征智能选择分析角度
+- **数据内容优化**: 确保 Gemini 获得完整准确的数据信息
+
+### 智能分析流程
+- **场景匹配 → 精准提示词 → Gemini 主导分析**
+- **可视化图表自动生成**: 排行榜、分布图、相关性分析
+- **专业报告样式**: 智能高亮显示和结构化展示
 
 ## 🚀 快速开始
 
-### 方式一：命令行简化版（推荐）
+### 1. 环境准备
+```bash
+# 克隆项目
+git clone <repository-url>
+cd AI_Excel
 
-1. **配置 API Key**
-   ```bash
-   python check_api_key.py
-   ```
-   或手动设置：
-   ```bash
-   set GEMINI_API_KEY=您的API_KEY
-   ```
+# 安装 Python 依赖
+pip install -r requirements.txt
 
-2. **运行分析**
-   ```bash
-   python simple_gemini_demo.py
-   ```
-   输入Excel文件名即可开始分析。
+# 安装前端依赖
+cd frontend
+npm install
+cd ..
+```
 
-### 方式二：Web界面完整版
+### 2. 配置 API Key
+在 `backend/enhanced_analysis_api.py` 中配置您的 Gemini API Key：
+```python
+self.api_key = "YOUR_GEMINI_API_KEY"
+```
 
-1. **安装依赖**
-   ```bash
-   pip install -r requirements.txt
-   cd frontend && npm install && cd ..
-   ```
+### 3. 启动系统
+```bash
+# 终端 1: 启动后端服务
+cd backend
+python app.py
 
-2. **启动服务**
-   ```bash
-   # 终端 1: 后端服务
-   cd backend && python app_excel_optimized.py
-   
-   # 终端 2: 前端服务
-   cd frontend && npm start
-   ```
+# 终端 2: 启动前端服务
+cd frontend
+npm start
+```
 
-3. **访问应用**
-   打开浏览器访问 http://localhost:3000## 📝 使用说明
+### 4. 访问应用
+打开浏览器访问: http://localhost:3000
+
+## 📊 使用说明
+
+1. **上传 Excel 文件**: 支持 .xlsx 和 .xls 格式
+2. **选择工作表**: 从上传的文件中选择要分析的工作表
+3. **智能分析**: 系统自动进行场景匹配和分析
+4. **查看结果**: 浏览 AI 生成的分析报告和可视化图表
+
+## 🛠️ 技术架构
+
+### 后端模块
+```
+backend/
+├── app.py                           # 主 Flask 应用服务器
+├── enhanced_analysis_api.py         # 增强版分析 API
+├── intelligent_scenario_matcher.py  # 智能场景匹配系统
+└── scenario_prompt_engine.py        # 场景化提示词引擎
+```
+
+### 前端组件
+```
+frontend/src/components/
+├── FileUpload.js      # 文件上传组件
+├── DataAnalysis.js    # 数据分析主界面
+└── ChartDisplay.js    # 图表显示组件
+```
+
+### 技术栈
+- **后端**: Python Flask + pandas + numpy + scikit-learn
+- **前端**: React + Ant Design + ECharts
+- **AI 引擎**: Google Gemini 2.0 Flash API
+- **数据处理**: pandas + numpy + openpyxl
+
+## 📝 核心特性
+
+### 智能场景识别
+系统支持以下业务场景的智能识别：
+- **电商数据分析**: 销量、品牌、产品、价格等
+- **汽车销售分析**: 车型、销量、品牌等
+- **财务业绩分析**: 收入、成本、利润等
+- **市场竞争分析**: 市场份额、排名、竞争对手等
+
+### 分析功能
+- **排行榜分析**: 自动生成品牌、产品等排行榜
+- **分布情况分析**: 市场份额和竞争格局分析
+- **相关性分析**: 数值字段间的相关关系分析
+- **智能洞察**: 基于 Gemini 的专业分析结果
+
+### 美观展示
+- **智能高亮**: 数字、品牌、关键词自动高亮
+- **专业报告样式**: 结构化、有条理的分析结果展示
+- **响应式设计**: 支持各种屏幕尺寸
+
+## 📝 注意事项
+
+1. **环境要求**: Python 3.7+ 和 Node.js 14+
+2. **API Key**: 需要有效的 Gemini API Key
+3. **文件支持**: 支持 .xlsx 和 .xls 格式的 Excel 文件
+4. **数据安全**: 上传的文件会临时保存在 backend/uploads 目录
+
+## 🌟 项目亮点
+
+1. **智能化**: 基于相似度算法的智能场景匹配
+2. **专业化**: 针对不同业务场景的专业化分析
+3. **自动化**: 全自动的分析流程，无需手动配置
+4. **可视化**: 丰富的图表展示和互动体验
+5. **高质量**: 基于 Gemini 2.0 Flash 的高质量分析结果## 📝 使用说明
 
 ### 命令行版
 - 将Excel文件放在项目目录下
