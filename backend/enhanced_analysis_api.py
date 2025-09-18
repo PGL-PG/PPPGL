@@ -3,13 +3,11 @@
 集成场景匹配和智能提示词生成系统
 """
 
-from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
 import json
 import os
 import requests
-from werkzeug.utils import secure_filename
 
 # 导入智能分析系统
 from intelligent_scenario_matcher import ScenarioMatcher
@@ -131,10 +129,13 @@ class EnhancedAnalysisAPI:
             # 6. 生成数据表格
             data_tables = self._generate_data_tables(df, basic_stats_overview)
             
-            # 7. 生成可视化图表
-            charts = self._generate_charts(df, best_scenario)
+            # 7. 智能解析Gemini的可视化建议并生成图表
+            charts = self._generate_charts_from_ai_suggestions(df, ai_insights, best_scenario)
             
-            # 8. 构建返回结果
+            # 8. 过滤AI洞察中的图表标题
+            filtered_ai_insights = self._filter_visualization_suggestions(ai_insights)
+            
+            # 9. 构建返回结果
             result = {
                 "status": "success",
                 "analysis_type": f"scenario_based_analysis_{best_scenario}",
@@ -150,7 +151,7 @@ class EnhancedAnalysisAPI:
                     "total_columns": len(df.columns),
                     "missing_data": self._get_missing_data_info(df)
                 },
-                "ai_insights": ai_insights,
+                "ai_insights": filtered_ai_insights,
                 "charts": charts,
                 "recommendations": self._generate_recommendations(best_scenario, confidence),
                 "ai_called": ai_called
@@ -269,8 +270,223 @@ class EnhancedAnalysisAPI:
         
         return data_tables
     
+    def _generate_charts_from_ai_suggestions(self, df: pd.DataFrame, ai_insights: str, scenario: str) -> list:
+        """基于Gemini的智能建议生成图表"""
+        charts = []
+        
+        try:
+            # 解析AI返回的可视化建议
+            viz_suggestions = self._parse_visualization_suggestions(ai_insights)
+            
+            if not viz_suggestions:
+                # 如果AI没有返回结构化的建议，使用默认逻辑
+                print("未发现AI可视化建议，使用默认逻辑")
+                return self._generate_charts(df, scenario)
+            
+            print(f"解析到{len(viz_suggestions)}个可视化建议")
+            
+            # 根据AI建议生成图表
+            for i, suggestion in enumerate(viz_suggestions[:4]):  # 最多4个图表
+                chart = self._create_chart_from_suggestion(df, suggestion, i)
+                if chart:
+                    charts.append(chart)
+            
+            # 如果没有成功生成任何图表，使用默认逻辑
+            if not charts:
+                print("没有成功生成AI建议图表，使用默认逻辑")
+                return self._generate_charts(df, scenario)
+                
+        except Exception as e:
+            print(f"解析AI可视化建议失败: {e}")
+            # 如果解析失败，使用默认逻辑
+            return self._generate_charts(df, scenario)
+        
+        return charts
+    
+    def _parse_visualization_suggestions(self, ai_insights: str) -> list:
+        """解析AI返回的可视化建议"""
+        suggestions = []
+        
+        if not ai_insights or not isinstance(ai_insights, str):
+            return suggestions
+        
+        try:
+            # 查找可视化建议章节
+            viz_section_start = ai_insights.find("📊 Excel可视化建议")
+            if viz_section_start == -1:
+                viz_section_start = ai_insights.find("可视化建议")
+            if viz_section_start == -1:
+                viz_section_start = ai_insights.find("Excel多维度可视化")
+            if viz_section_start == -1:
+                viz_section_start = ai_insights.find("多维度可视化")
+            
+            if viz_section_start == -1:
+                return suggestions
+            
+            viz_section = ai_insights[viz_section_start:]
+            lines = viz_section.split('\n')
+            
+            current_chart = None
+            
+            for line in lines:
+                line = line.strip()
+                
+                # 检测图表标题
+                if line.startswith('###') and ('：' in line or ':' in line):
+                    if current_chart:
+                        suggestions.append(current_chart)
+                    
+                    # 解析图表信息
+                    title_part = line.replace('###', '').strip()
+                    separator = '：' if '：' in title_part else ':'
+                    
+                    if separator in title_part:
+                        chart_type_title = title_part.split(separator, 1)
+                        if len(chart_type_title) >= 2:
+                            chart_info = chart_type_title[0].strip()
+                            title = chart_type_title[1].strip()
+                            
+                            # 提取图表类型
+                            chart_type = self._extract_chart_type(chart_info)
+                            
+                            current_chart = {
+                                'type': chart_type,
+                                'title': title,
+                                'dimension_field': None,
+                                'measure_field': None,
+                                'reason': '',
+                                'expected_insight': ''
+                            }
+                
+                # 解析字段信息
+                elif current_chart and ('维度字段' in line or '度量字段' in line):
+                    if '维度字段' in line:
+                        field_info = line.split('：', 1) if '：' in line else line.split(':', 1)
+                        if len(field_info) >= 2:
+                            current_chart['dimension_field'] = field_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                    
+                    elif '度量字段' in line:
+                        field_info = line.split('：', 1) if '：' in line else line.split(':', 1)
+                        if len(field_info) >= 2:
+                            current_chart['measure_field'] = field_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                
+                elif current_chart and ('推荐理由' in line or '预期洞察' in line):
+                    if '推荐理由' in line:
+                        reason_info = line.split('：', 1) if '：' in line else line.split(':', 1)
+                        if len(reason_info) >= 2:
+                            current_chart['reason'] = reason_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                    
+                    elif '预期洞察' in line:
+                        insight_info = line.split('：', 1) if '：' in line else line.split(':', 1)
+                        if len(insight_info) >= 2:
+                            current_chart['expected_insight'] = insight_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+            
+            # 添加最后一个图表
+            if current_chart:
+                suggestions.append(current_chart)
+            
+        except Exception as e:
+            print(f"解析可视化建议失败: {e}")
+        
+        return suggestions
+    
+    def _extract_chart_type(self, chart_info: str) -> str:
+        """从图表信息中提取图表类型"""
+        chart_info_lower = chart_info.lower()
+        
+        if '柱状图' in chart_info or 'bar' in chart_info_lower:
+            return 'bar'
+        elif '饼图' in chart_info or 'pie' in chart_info_lower:
+            return 'pie'
+        elif '折线图' in chart_info or 'line' in chart_info_lower:
+            return 'line'
+        elif '散点图' in chart_info or 'scatter' in chart_info_lower:
+            return 'scatter'
+        elif '直方图' in chart_info or 'histogram' in chart_info_lower:
+            return 'histogram'
+        else:
+            return 'bar'  # 默认使用柱状图
+    
+    def _create_chart_from_suggestion(self, df: pd.DataFrame, suggestion: dict, index: int) -> dict:
+        """根据AI廚议创建具体图表"""
+        try:
+            chart_type = suggestion.get('type', 'bar')
+            title = suggestion.get('title', f'图表{index + 1}')
+            dimension_field = suggestion.get('dimension_field')
+            measure_field = suggestion.get('measure_field')
+            expected_insight = suggestion.get('expected_insight', '')
+            
+            # 验证字段存在
+            if dimension_field and dimension_field not in df.columns:
+                print(f"维度字段 {dimension_field} 不存在")
+                return {}
+            
+            if measure_field and measure_field not in df.columns:
+                print(f"度量字段 {measure_field} 不存在")
+                return {}
+            
+            chart_data = []
+            subtitle = expected_insight
+            
+            if chart_type == 'bar' and dimension_field and measure_field:
+                # 柱状图：维度 x 度量
+                grouped = df.groupby(dimension_field)[measure_field].sum().sort_values(ascending=False).head(10)
+                chart_data = [{'name': str(name), 'value': float(value)} for name, value in grouped.items()]
+                if not subtitle:
+                    subtitle = f'{dimension_field}在{measure_field}上的表现排名'
+            
+            elif chart_type == 'pie' and dimension_field:
+                # 饼图：维度分布
+                value_counts = df[dimension_field].value_counts().head(8)
+                total = value_counts.sum()
+                chart_data = []
+                for name, count in value_counts.items():
+                    percentage = (count / total * 100) if total > 0 else 0
+                    chart_data.append({'name': str(name), 'value': round(percentage, 1)})
+                if not subtitle:
+                    subtitle = f'{dimension_field}的分布情况'
+            
+            elif chart_type == 'scatter' and dimension_field and measure_field:
+                # 散点图：两个数值字段的关系
+                clean_data = df[[dimension_field, measure_field]].dropna()
+                if len(clean_data) > 5:
+                    sample_data = clean_data.sample(min(50, len(clean_data)))
+                    chart_data = [[float(row[dimension_field]), float(row[measure_field])] for _, row in sample_data.iterrows()]
+                    if not subtitle:
+                        correlation = df[dimension_field].corr(df[measure_field])
+                        subtitle = f'{dimension_field}与{measure_field}的相关性：{correlation:.3f}'
+            
+            elif chart_type == 'line' and dimension_field and measure_field:
+                # 折线图：时间趋势或序列分析
+                if pd.api.types.is_datetime64_any_dtype(df[dimension_field]):
+                    # 时间维度
+                    time_series = df.groupby(dimension_field)[measure_field].sum().sort_index()
+                    chart_data = [{'name': str(name), 'value': float(value)} for name, value in time_series.items()]
+                else:
+                    # 非时间维度，使用排序
+                    grouped = df.groupby(dimension_field)[measure_field].sum().sort_values(ascending=False).head(15)
+                    chart_data = [{'name': str(name), 'value': float(value)} for name, value in grouped.items()]
+                if not subtitle:
+                    subtitle = f'{dimension_field}随{measure_field}的变化趋势'
+            
+            # 如果没有生成数据，返回空
+            if not chart_data:
+                print(f"图表 {title} 没有生成数据")
+                return None
+            
+            return {
+                'type': chart_type,
+                'title': title,
+                'data': chart_data,
+                'subtitle': subtitle,
+                'ai_driven': True  # 标记这是AI驱动的图表
+            }
+            
+        except Exception as e:
+            print(f"创建图表失败: {e}")
+            return None
+    
     def _generate_charts(self, df: pd.DataFrame, scenario: str) -> list:
-        """生成图表"""
         charts = []
         
         try:
@@ -368,6 +584,72 @@ class EnhancedAnalysisAPI:
         
         return recommendations
     
+    def _filter_visualization_suggestions(self, ai_insights: str) -> str:
+        """完全过滤掉可视化建议章节，包括八个图表的所有相关内容"""
+        if not ai_insights or not isinstance(ai_insights, str):
+            return ai_insights
+        
+        try:
+            import re
+            lines = ai_insights.split('\n')
+            filtered_lines = []
+            skip_section = False
+            
+            for line in lines:
+                line_stripped = line.strip()
+                
+                # 检测可视化建议章节的开始
+                if (line_stripped.startswith('##') and 
+                    ('可视化建议' in line_stripped or 
+                     'Excel可视化' in line_stripped or 
+                     'Excel多维度可视化' in line_stripped or
+                     '多维度可视化' in line_stripped or
+                     '图表建议' in line_stripped or
+                     '推荐图表' in line_stripped or
+                     ('📊' in line_stripped and ('Excel' in line_stripped or '可视化' in line_stripped)))):
+                    skip_section = True
+                    continue
+                
+                # 检测新章节的开始（非可视化相关）
+                elif line_stripped.startswith('##') and skip_section:
+                    # 如果是新的非可视化章节，停止跳过
+                    if not ('可视化' in line_stripped or '图表' in line_stripped or '📊' in line_stripped):
+                        skip_section = False
+                        filtered_lines.append(line)
+                    continue
+                
+                # 如果在跳过状态，继续跳过
+                if skip_section:
+                    continue
+                
+                # 过滤单独的图表相关行
+                if (re.match(r'^💡\s*图表\d+[：:]\s*(柱状图|饼图|折线图|散点图|热力图|箱线图|直方图)', line_stripped) or
+                    re.match(r'^###\s*图表\d+[：:]', line_stripped) or
+                    '维度字段：' in line_stripped or
+                    '度量字段：' in line_stripped or
+                    '推荐理由：' in line_stripped or
+                    '预期洞察：' in line_stripped or
+                    ('图表类型：' in line_stripped and ('柱状图' in line_stripped or '饼图' in line_stripped or '折线图' in line_stripped))):
+                    continue
+                
+                # 保留其他内容
+                filtered_lines.append(line)
+            
+            filtered_content = '\n'.join(filtered_lines)
+            
+            # 清理多余的空行
+            filtered_content = re.sub(r'\n\s*\n\s*\n', '\n\n', filtered_content)
+            
+            # 如果过滤后内容为空，返回简单的分析完成提示
+            if not filtered_content.strip():
+                return "## 📊 数据分析完成\n\n基于您的数据，我们已完成深度分析并生成了专业的可视化图表。所有图表均基于数据特征智能生成，为您提供直观的数据洞察。"
+            
+            return filtered_content.strip()
+            
+        except Exception as e:
+            print(f"过滤可视化建议失败: {e}")
+            return ai_insights
+
     def _sanitize_for_json(self, obj):
         """递归将对象中的numpy/pandas类型转为原生Python类型"""
         if isinstance(obj, dict):

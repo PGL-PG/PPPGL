@@ -319,34 +319,76 @@ class ScenarioPromptEngine:
         
         return enhanced_prompt
     
-    def create_visualization_prompt_supplement(self, df: pd.DataFrame, scenario: str) -> str:
-        """创建可视化专用的提示词补充"""
+    def create_visualization_prompt_supplement(self, df: pd.DataFrame, scenario: str, scenario_details: Optional[dict] = None) -> str:
+        """创建可视化专用的提示词补充 - 基于场景识别结果让Gemini智能决策"""
         
-        viz_prompt = f"\n\n**可视化分析专项要求：**\n"
-        viz_prompt += f"基于数据特征，请推荐3-4个最有价值的可视化图表：\n\n"
-        
-        # 检测适合的图表类型
+        # 检测字段类型和特征
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         categorical_cols = [col for col in df.columns 
                           if len(df[col].unique()) / len(df[col]) < 0.5 and len(df[col].unique()) < 50]
+        date_cols = [col for col in df.columns 
+                    if pd.api.types.is_datetime64_any_dtype(df[col]) or 
+                       any(keyword in col.lower() for keyword in ['日期', '时间', 'date', 'time'])]
         
-        viz_recommendations = []
+        # 构建场景特征信息
+        scenario_info = ""
+        if scenario_details:
+            scenario_info = f"""
+**📊 数据场景识别结果：**
+- 匹配场景：{scenario}
+- 置信度：{scenario_details.get('confidence', 0):.2f}
+- 关键特征：{scenario_details.get('key_features', [])}
+- 分析潜力：{scenario_details.get('analysis_potential', {})}
+"""
         
-        # 排行榜图表
-        if categorical_cols and numeric_cols:
-            viz_recommendations.append(f"柱状图：{categorical_cols[0]} × {numeric_cols[0]} 排行榜")
-        
-        # 分布图表
-        if categorical_cols:
-            viz_recommendations.append(f"饼图：{categorical_cols[0]} 分布占比")
-        
-        # 相关性图表
-        if len(numeric_cols) >= 2:
-            viz_recommendations.append(f"散点图：{numeric_cols[0]} vs {numeric_cols[1]} 相关性")
-        
-        for i, rec in enumerate(viz_recommendations[:3], 1):
-            viz_prompt += f"{i}. **{rec}**\n"
-            viz_prompt += f"   - 预期洞察：[基于业务场景的具体洞察]\n"
-            viz_prompt += f"   - 推荐理由：[数据特征支撑的理由]\n\n"
+        viz_prompt = f"""
+{scenario_info}
+
+**🎯 全方位可视化分析要求：**
+
+**核心要求：**
+1. 🔍 基于场景识别结果和数据特征，设计6-8个多维度可视化方案
+2. 📊 覆盖不同分析角度：排行分析、分布分析、趋势分析、对比分析、关联分析等
+3. 🎨 所有图表类型必须是Excel原生支持的（柱状图、饼图、折线图、散点图、直方图）
+4. 🎯 每个图表都要有明确的业务洞察目标，避免重复分析
+5. 📈 优先选择能产生具体业务洞察的字段组合
+6. 🔗 考虑多字段联合分析，不局限于单一维度
+
+**数据字段概况：**
+- 数值型字段（{len(numeric_cols)}个）：{numeric_cols[:10]}{'...' if len(numeric_cols) > 10 else ''}
+- 分类型字段（{len(categorical_cols)}个）：{categorical_cols[:10]}{'...' if len(categorical_cols) > 10 else ''}
+- 时间型字段（{len(date_cols)}个）：{date_cols[:5]}{'...' if len(date_cols) > 5 else ''}
+
+**请在分析报告最后，单独输出一个可视化建议章节，格式如下：**
+
+## 📊 Excel多维度可视化方案
+
+### 图表1：[图表类型] - [具体标题]
+- **维度字段**：[字段名1,字段名2...] 
+- **度量字段**：[字段名]
+- **分析目标**：[要解答的业务问题]
+- **预期洞察**：[期望发现的具体洞察]
+- **图表说明**：[为什么选择这个组合]
+
+### 图表2：[图表类型] - [具体标题]
+- **维度字段**：[字段名1,字段名2...]
+- **度量字段**：[字段名]
+- **分析目标**：[要解答的业务问题]
+- **预期洞察**：[期望发现的具体洞察]
+- **图表说明**：[为什么选择这个组合]
+
+### 图表3：[图表类型] - [具体标题]
+...(继续到图表6-8)
+
+**多维度分析要求：**
+- 🔄 同时考虑单维度分析（如品牌排行）和多维度交叉分析（如品牌×地区×时间）
+- 📊 包含聚合分析（总和、平均值）和分布分析（占比、排名）
+- 🎯 针对{scenario}场景的特殊分析需求
+- 💡 确保每个图表都能产生不同角度的业务价值
+
+**禁止的图表类型：**
+❌ 热力图、雷达图、桑基图、网络图、地理图、箱线图、小提琴图等Excel不支持的高级图表
+✅ 仅使用：柱状图(bar)、饼图(pie)、折线图(line)、散点图(scatter)、直方图(histogram)
+"""
         
         return viz_prompt

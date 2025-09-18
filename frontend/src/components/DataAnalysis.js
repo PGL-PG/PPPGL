@@ -105,12 +105,12 @@ const DataAnalysis = ({
   const [loading, setLoading] = useState(false);
   const [expandedFieldSummary, setExpandedFieldSummary] = useState(false);
 
-  // 解析AI洞察为结构化内容（过滤可视化建议部分）
-  const parseAIInsights = (aiText) => {
-    if (!aiText || typeof aiText !== 'string') return [];
+  // 解析分析洞察为结构化内容（过滤可视化建议部分）
+  const parseAnalysisInsights = (analysisText) => {
+    if (!analysisText || typeof analysisText !== 'string') return [];
     
     const sections = [];
-    const lines = aiText.split('\n').filter(line => line.trim());
+    const lines = analysisText.split('\n').filter(line => line.trim());
     
     let currentSection = null;
     let skipVisualizationSection = false;
@@ -127,12 +127,19 @@ const DataAnalysis = ({
         
         const title = trimmedLine.replace(/^##\s*/, '');
         
-        // 检测是否为可视化建议相关的章节
+        // 检测是否为可视化建议相关的章节 - 完全过滤可视化相关章节
         skipVisualizationSection = title.includes('可视化建议') || 
                                    title.includes('推荐图表') || 
                                    title.includes('图表组合') ||
                                    title.includes('图表推荐') ||
-                                   title.includes('智能可视化');
+                                   title.includes('可视化推荐') ||
+                                   title.includes('Excel多维度可视化') ||
+                                   title.includes('Excel可视化') ||
+                                   title.includes('多维度可视化方案') ||
+                                   title.includes('可视化方案') ||
+                                   title.includes('图表建议') ||
+                                   title.includes('图表分析') ||
+                                   (title.includes('📊') && (title.includes('Excel') || title.includes('可视化') || title.includes('图表')));
         
         if (!skipVisualizationSection) {
           let icon = '💡';
@@ -163,18 +170,25 @@ const DataAnalysis = ({
       else if (trimmedLine.startsWith('-') && !skipVisualizationSection) {
         const content = trimmedLine.replace(/^-\s*/, '');
         
-        // 过滤可视化相关的列表项
+        // 过滤可视化相关的列表项 - 完全过滤图表相关内容
         if (!content.includes('柱状图') && 
             !content.includes('饼图') && 
             !content.includes('折线图') && 
             !content.includes('散点图') && 
             !content.includes('热力图') &&
             !content.includes('箱线图') &&
+            !content.includes('直方图') &&
             !content.includes('图表类型') &&
             !content.includes('维度字段') &&
             !content.includes('度量字段') &&
             !content.includes('推荐理由') &&
-            !content.includes('预期洞察')) {
+            !content.includes('预期洞察') &&
+            !content.includes('图表说明') &&
+            !content.includes('分析目标') &&
+            !content.includes('图表建议') &&
+            !content.includes('可视化类型') &&
+            !(/图表\d+[：:]/.test(content)) &&
+            !(/💡\s*图表/.test(content))) {
           
           if (currentSection) {
             currentSection.content.push(content);
@@ -188,20 +202,39 @@ const DataAnalysis = ({
           }
         }
       }
+      // 检测三级标题（### 开头的图表标题）
+      else if (trimmedLine.startsWith('###') && !skipVisualizationSection) {
+        // 如果遇到图表相关的三级标题，开始跳过
+        if (trimmedLine.includes('图表') || trimmedLine.includes('可视化')) {
+          skipVisualizationSection = true;
+          // 结束当前section
+          if (currentSection) {
+            sections.push(currentSection);
+            currentSection = null;
+          }
+        }
+      }
       // 其他内容行
       else if (trimmedLine && currentSection && !skipVisualizationSection) {
-        // 过滤可视化相关的内容
+        // 过滤可视化相关的内容 - 完全过滤图表相关内容
         if (!trimmedLine.includes('柱状图') &&
             !trimmedLine.includes('饼图') &&
             !trimmedLine.includes('折线图') &&
             !trimmedLine.includes('散点图') &&
             !trimmedLine.includes('热力图') &&
             !trimmedLine.includes('箱线图') &&
+            !trimmedLine.includes('直方图') &&
             !trimmedLine.includes('图表类型') &&
             !trimmedLine.includes('维度字段') &&
             !trimmedLine.includes('度量字段') &&
             !trimmedLine.includes('推荐理由') &&
-            !trimmedLine.includes('预期洞察')) {
+            !trimmedLine.includes('预期洞察') &&
+            !trimmedLine.includes('图表说明') &&
+            !trimmedLine.includes('分析目标') &&
+            !trimmedLine.includes('图表建议') &&
+            !trimmedLine.includes('可视化类型') &&
+            !(/图表\d+[：:]/.test(trimmedLine)) &&
+            !(/💡\s*图表/.test(trimmedLine))) {
           currentSection.content.push(trimmedLine);
         }
       }
@@ -213,8 +246,8 @@ const DataAnalysis = ({
     }
     
     // 如果没有解析到任何section，将整个文本作为一个section（过滤可视化相关内容）
-    if (sections.length === 0 && aiText.trim()) {
-      const filteredText = aiText.split('\n')
+    if (sections.length === 0 && analysisText.trim()) {
+      const filteredText = analysisText.split('\n')
         .filter(line => {
           const trimmed = line.trim();
           return !trimmed.includes('可视化建议') &&
@@ -224,16 +257,28 @@ const DataAnalysis = ({
                  !trimmed.includes('折线图') &&
                  !trimmed.includes('散点图') &&
                  !trimmed.includes('热力图') &&
+                 !trimmed.includes('箱线图') &&
+                 !trimmed.includes('直方图') &&
                  !trimmed.includes('维度字段') &&
-                 !trimmed.includes('度量字段');
+                 !trimmed.includes('度量字段') &&
+                 !trimmed.includes('推荐理由') &&
+                 !trimmed.includes('预期洞察') &&
+                 !trimmed.includes('图表类型') &&
+                 !trimmed.includes('图表建议') &&
+                 !trimmed.includes('Excel多维度') &&
+                 !trimmed.includes('Excel可视化') &&
+                 !(/图表\d+[：:]/.test(trimmed)) &&
+                 !(/💡\s*图表/.test(trimmed)) &&
+                 !trimmed.startsWith('###') ||
+                 (trimmed.startsWith('###') && !trimmed.includes('图表') && !trimmed.includes('可视化'));
         })
         .join('\n')
         .trim();
       
       if (filteredText) {
         sections.push({
-          title: 'AI智能分析',
-          icon: '🤖',
+          title: '数据分析报告',
+          icon: '📊',
           content: [filteredText]
         });
       }
@@ -414,7 +459,7 @@ const DataAnalysis = ({
       const dataSample = currentSheetData?.preview ? 
         JSON.stringify(currentSheetData.preview.slice(0, 3), null, 2) : null;
 
-      // 调用后端分析接口（会转发给 Gemini）
+      // 调用后端分析接口
       const response = await axios.post('/api/analyze', {
         filename,
         sheet_name: selectedSheet,
@@ -601,7 +646,7 @@ const DataAnalysis = ({
     }
   };
 
-  // 智能推荐列选择
+  // 推荐字段选择
   const handleSmartSelect = () => {
     if (!dataPreview || !dataPreview.potential_fields) return;
     
@@ -819,7 +864,7 @@ const DataAnalysis = ({
                     type="link" 
                     onClick={handleSmartSelect}
                   >
-                    智能推荐
+                    推荐字段
                   </Button>
                 )}
               </Space>
@@ -903,28 +948,102 @@ const DataAnalysis = ({
           {/* 先展示可视化图表 */}
           {analysisResult?.charts && analysisResult.charts.length > 0 && (
             <Card 
-              title="📊 数据可视化分析"
+              title={
+                <Space>
+                  <BarChartOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
+                  <Text strong style={{ color: '#1890ff', fontSize: '16px' }}>数据可视化分析</Text>
+                  <Tag color="blue" icon={<BarChartOutlined />}>
+                    专业分析
+                  </Tag>
+                </Space>
+              }
               style={{ marginBottom: 24 }}
               extra={
-                <Tag color="blue">
-                  {analysisResult.analysis_type === 'excel_focused_analysis' ? 'Excel分析' :
-                   analysisResult.analysis_type === 'business_analysis' ? '商业分析' :
-                   analysisResult.analysis_type === 'comprehensive_gemini_analysis' ? 'Gemini分析' :
-                   '数据分析'}
-                </Tag>
+                <Space>
+                  <Tag color="blue">
+                    {analysisResult.analysis_type?.includes('multidimensional') ? 'Gemini多维度分析' :
+                     analysisResult.analysis_type?.includes('gemini') ? 'Gemini主导分析' :
+                     analysisResult.analysis_type?.includes('excel') ? 'Excel分析' :
+                     analysisResult.analysis_type?.includes('business') ? '商业分析' :
+                     '数据分析'}
+                  </Tag>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    {analysisResult.scenario_info?.multidimensional_features?.length > 0 ? 
+                      `支持: ${analysisResult.scenario_info.multidimensional_features.join('、')}` :
+                      '基于Gemini的数据理解生成'
+                    }
+                  </Text>
+                </Space>
               }
+              headStyle={{
+                background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%)',
+                borderBottom: '2px solid #91d5ff'
+              }}
             >
+              <Alert
+                message={
+                  <Space>
+                    <BulbOutlined style={{ color: '#722ed1' }} />
+                    <Text strong>AI驱动的智能可视化</Text>
+                  </Space>
+                }
+             
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
               <Row gutter={[16, 16]}>
                 {analysisResult.charts.map((chartData, index) => (
                   <Col xs={24} lg={12} key={index}>
-                    <ChartDisplay chartData={chartData} />
-                    {chartData.subtitle && (
-                      <div style={{ padding: '8px 16px', background: '#f0f2f5', borderRadius: '4px', marginTop: '8px' }}>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          {chartData.subtitle}
-                        </Text>
+                    <div style={{ border: '1px solid #f0f0f0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div style={{ 
+                        padding: '12px 16px', 
+                        background: chartData.ai_driven ? 
+                          (chartData.multidimensional ? 
+                            'linear-gradient(90deg, #f9f0ff 0%, #e6f7ff 50%, #f0f9ff 100%)' : 
+                            'linear-gradient(90deg, #f9f0ff 0%, #f0f9ff 100%)'
+                          ) : '#fafafa',
+                        borderBottom: '1px solid #f0f0f0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <Text strong style={{ color: '#1890ff' }}>{chartData.title}</Text>
+                        <Space>
+                          {chartData.ai_driven && (
+                            <Tag color="purple" size="small">
+                              <BulbOutlined /> AI生成
+                            </Tag>
+                          )}
+                          {chartData.multidimensional && (
+                            <Tag color="orange" size="small">
+                              🔗 多维度
+                            </Tag>
+                          )}
+                          {chartData.dimension_count > 1 && (
+                            <Tag color="green" size="small">
+                              {chartData.dimension_count}个维度
+                            </Tag>
+                          )}
+                        </Space>
                       </div>
-                    )}
+                      <div style={{ padding: '16px' }}>
+                        <ChartDisplay chartData={chartData} />
+                      </div>
+                      {chartData.subtitle && (
+                        <div style={{ 
+                          padding: '8px 16px', 
+                          background: '#f8f9fa', 
+                          borderTop: '1px solid #f0f0f0',
+                          fontSize: '12px',
+                          color: '#666'
+                        }}>
+                          <Text type="secondary">
+                            📊 {chartData.subtitle}
+                          </Text>
+                        </div>
+                      )}
+                    </div>
                   </Col>
                 ))}
               </Row>
@@ -936,7 +1055,12 @@ const DataAnalysis = ({
             title={
               <Space>
                 <FileTextOutlined style={{ color: '#1890ff', fontSize: '16px' }} />
-                <Text strong style={{ color: '#1890ff', fontSize: '18px' }}>专业分析报告</Text>
+                <Text strong style={{ color: '#1890ff', fontSize: '18px' }}>Gemini专业分析报告</Text>
+                {analysisResult.ai_called && (
+                  <Tag color="green" icon={<BulbOutlined />}>
+                    实时AI分析
+                  </Tag>
+                )}
               </Space>
             }
             style={{ 
@@ -954,7 +1078,7 @@ const DataAnalysis = ({
             {analysisResult.ai_insights ? (
               <div>
                 {(() => {
-                  const parsedSections = parseAIInsights(analysisResult.ai_insights);
+                  const parsedSections = parseAnalysisInsights(analysisResult.ai_insights);
                   
                   if (parsedSections.length === 0) {
                     return (
@@ -1111,14 +1235,7 @@ const DataAnalysis = ({
                 </Card>
               )}
 
-            {/* 图表建议展示 */}
-            {analysisResult.chart_suggestions && (
-              <Card title="📈 Excel图表建议" style={{ marginBottom: 24 }}>
-                <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.8' }}>
-                  {analysisResult.chart_suggestions}
-                </div>
-              </Card>
-            )}
+            {/* 图表建议已转换为实际ECharts图表，不再显示文本建议 */}
           </div>
         )}
 

@@ -28,7 +28,7 @@ git clone <repository-url>
 cd AI_Excel
 
 # 安装 Python 依赖
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # 安装前端依赖
 cd frontend
@@ -124,9 +124,7 @@ frontend/src/components/
 5. **高质量**: 基于 Gemini 2.0 Flash 的高质量分析结果## 📝 使用说明
 
 ### 命令行版
-- 将Excel文件放在项目目录下
-- 运行 `simple_gemini_demo.py`
-- 输入文件名，等待AI分析结果
+- 当前版本专注于Web界面，命令行版本已简化
 
 ### Web界面版
 - 上传Excel文件（支持.xlsx和.xls格式）
@@ -169,32 +167,29 @@ frontend/src/components/
 ```
 AI_Excel/
 ├── README.md                    # 项目说明文档
-├── requirements.txt             # Python依赖包
 ├── .env.example                # 环境变量模板
 ├── check_api_key.py            # API Key配置检查工具
-├── simple_gemini_demo.py       # 命令行简化版
-├── server_gemini.py            # Gemini AI服务（可选）
 ├── backend/                    # 后端服务
-│   ├── app_excel_optimized.py  # 主服务文件（直接调用Gemini）
-│   ├── excel_analysis_engine.py # 数据分析引擎
-│   ├── app.py                  # 备用后端服务
-│   └── app_gemini_proxy.py     # 代理服务
+│   ├── app.py                  # 主Flask应用服务器
+│   ├── enhanced_analysis_api.py # 增强版分析API
+│   ├── intelligent_scenario_matcher.py # 智能场景匹配系统
+│   ├── scenario_prompt_engine.py # 场景化提示词引擎
+│   └── requirements.txt        # 后端依赖
 └── frontend/                   # React前端
     ├── package.json
     └── src/
         ├── App.js
         └── components/
-            ├── FileUpload.js           # 文件上传组件
-            ├── DataAnalysis.js         # 数据分析界面
-            ├── ChartDisplay.js         # 图表显示组件
-            └── AttributionAnalysis.js  # 归因分析组件
+            ├── FileUpload.js    # 文件上传组件
+            ├── DataAnalysis.js  # 数据分析界面
+            └── ChartDisplay.js  # 图表显示组件
 ```
 
 ### 架构设计
-- **直接调用**: `app_excel_optimized.py` 直接调用Gemini API，无需中间服务
-- **模块化设计**: 数据分析逻辑独立封装在`excel_analysis_engine.py`
+- **智能分析**: `app.py` 集成智能场景匹配和分析API
+- **模块化设计**: 场景匹配、提示词引擎、分析API独立封装
 - **前后端分离**: React前端 + Flask后端，通过API通信
-- **多端支持**: 支持命令行和Web界面两种使用方式
+- **专注Web界面**: 提供完整的Web分析体验
 
 ## 📝 注意事项
 

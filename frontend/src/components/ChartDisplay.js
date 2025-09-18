@@ -6,8 +6,14 @@ const { Title } = Typography;
 
 const ChartDisplay = ({ chartData }) => {
   const getChartOption = () => {
-    const { type, column, data, title } = chartData;
+    const { type, column, data, title, subtitle } = chartData;
     const chartTitle = title || `${column || '数据'} 图表`;
+    const chartSubtitle = subtitle || '';
+
+    // 调试信息
+    console.log('ChartDisplay - 图表类型:', type);
+    console.log('ChartDisplay - 图表标题:', chartTitle);
+    console.log('ChartDisplay - 数据样本:', data?.slice(0, 3));
 
     switch (type) {
       case 'histogram':
@@ -66,7 +72,16 @@ const ChartDisplay = ({ chartData }) => {
         return {
           title: {
             text: chartTitle,
-            left: 'center'
+            subtext: chartSubtitle,
+            left: 'center',
+            textStyle: {
+              fontSize: 16,
+              fontWeight: 'bold'
+            },
+            subtextStyle: {
+              fontSize: 12,
+              color: '#666'
+            }
           },
           tooltip: {
             trigger: 'item',
@@ -104,8 +119,17 @@ const ChartDisplay = ({ chartData }) => {
       case 'line':
         return {
           title: {
-            text: `${column} 趋势图`,
-            left: 'center'
+            text: chartTitle,
+            subtext: chartSubtitle,
+            left: 'center',
+            textStyle: {
+              fontSize: 16,
+              fontWeight: 'bold'
+            },
+            subtextStyle: {
+              fontSize: 12,
+              color: '#666'
+            }
           },
           tooltip: {
             trigger: 'axis'
@@ -133,7 +157,16 @@ const ChartDisplay = ({ chartData }) => {
         return {
           title: {
             text: chartTitle,
-            left: 'center'
+            subtext: chartSubtitle,
+            left: 'center',
+            textStyle: {
+              fontSize: 16,
+              fontWeight: 'bold'
+            },
+            subtextStyle: {
+              fontSize: 12,
+              color: '#666'
+            }
           },
           tooltip: {
             trigger: 'axis',
@@ -149,6 +182,7 @@ const ChartDisplay = ({ chartData }) => {
             left: '3%',
             right: '4%',
             bottom: '15%',
+            top: chartSubtitle ? '20%' : '15%',
             containLabel: true
           },
           xAxis: {
@@ -156,7 +190,8 @@ const ChartDisplay = ({ chartData }) => {
             data: data.map(item => item.name || item.x),
             axisLabel: {
               rotate: data.length > 8 ? 45 : 0,
-              interval: 0
+              interval: 0,
+              fontSize: 11
             }
           },
           yAxis: {
@@ -190,52 +225,84 @@ const ChartDisplay = ({ chartData }) => {
         };
 
       case 'scatter':
+        console.log('=== 散点图调试信息 ===');
+        console.log('图表类型:', type);
+        console.log('数据类型:', typeof data);
+        console.log('数据是否为数组:', Array.isArray(data));
+        console.log('数据长度:', data?.length);
+        console.log('前3个数据点:', data?.slice(0, 3));
+        console.log('第一个数据点是否为数组:', Array.isArray(data?.[0]));
+        console.log('========================');
+        
         return {
           title: {
-            text: title || `${column} 散点图`,
+            text: chartTitle,
+            subtext: chartSubtitle,
             left: 'center',
             textStyle: {
               fontSize: 16,
               fontWeight: 'bold'
+            },
+            subtextStyle: {
+              fontSize: 12,
+              color: '#666'
             }
           },
           tooltip: {
             trigger: 'item',
             formatter: function(params) {
-              if (params.data.length >= 4) {
-                return `${params.data[3]}<br/>X: ${params.data[0]}<br/>Y: ${params.data[1]}<br/>大小: ${params.data[2]}`;
-              }
-              return `X: ${params.data[0]}<br/>Y: ${params.data[1]}`;
+              return `售价: ${params.data[0]}<br/>销量: ${params.data[1]}`;
             }
+          },
+          grid: {
+            left: '10%',
+            right: '10%',
+            bottom: '15%',
+            top: chartSubtitle ? '25%' : '20%',
+            containLabel: true
           },
           xAxis: {
             type: 'value',
-            name: 'X轴',
+            name: '售价',
             nameLocation: 'middle',
-            nameGap: 30
+            nameGap: 30,
+            axisLabel: {
+              formatter: function(value) {
+                return value.toLocaleString();
+              }
+            }
           },
           yAxis: {
             type: 'value',
-            name: 'Y轴',
+            name: '销量',
             nameLocation: 'middle',
-            nameGap: 40
+            nameGap: 40,
+            axisLabel: {
+              formatter: function(value) {
+                if (value >= 1000) {
+                  return (value / 1000).toFixed(1) + 'K';
+                }
+                return value;
+              }
+            }
           },
           series: [{
-            name: column || '数据点',
+            name: '数据点',
             type: 'scatter',
             data: data,
-            symbolSize: function(data) {
-              return data.length >= 3 ? Math.max(data[2] / 10, 8) : 8;
-            },
+            symbolSize: 10,
+            symbol: 'circle',
             itemStyle: {
               color: '#722ed1',
-              opacity: 0.7
+              opacity: 0.8,
+              borderColor: '#722ed1',
+              borderWidth: 1
             },
             emphasis: {
               itemStyle: {
                 opacity: 1,
-                borderColor: '#722ed1',
-                borderWidth: 2
+                shadowBlur: 10,
+                shadowColor: 'rgba(114, 46, 209, 0.5)'
               }
             }
           }]
