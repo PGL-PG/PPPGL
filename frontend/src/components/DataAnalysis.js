@@ -631,100 +631,114 @@ const DataAnalysis = ({
       dataIndex: col,
       key: col,
       ellipsis: true,
-      width: columnType === 'numeric' ? 120 : 150,
+      width: Math.max(120, Math.min(200, col.length * 8 + 80)), // 动态宽度
       align: columnType === 'numeric' ? 'right' : 'left',
       render: (value) => {
         if (value === null || value === undefined || value === '') {
-          return <Text type="secondary">-</Text>;
+          return <Text type="secondary" style={{ fontSize: '12px' }}>-</Text>;
         }
         
         // 数值类型格式化
         if (columnType === 'numeric' && typeof value === 'number') {
           return (
-            <Text style={{ fontFamily: 'monospace', fontWeight: 500 }}>
+            <Text style={{ fontFamily: 'monospace', fontWeight: 500, fontSize: '12px' }}>
               {value.toLocaleString()}
             </Text>
           );
         }
         
         // 文本类型截断显示
-        if (typeof value === 'string' && value.length > 20) {
+        if (typeof value === 'string') {
+          const displayValue = value.length > 25 ? value.substring(0, 25) + '...' : value;
           return (
-            <Text ellipsis={{ tooltip: value }} style={{ maxWidth: 130 }}>
-              {value}
+            <Text 
+              style={{ fontSize: '12px' }}
+              title={value.length > 25 ? value : undefined}
+            >
+              {displayValue}
             </Text>
           );
         }
         
-        return <Text>{value}</Text>;
+        return <Text style={{ fontSize: '12px' }}>{String(value)}</Text>;
       }
     };
   }) : [];
 
   // 渲染数据预览
   const renderDataPreview = () => {
-    if (!dataPreview || dataPreview.error) {
+    if (!sheetsData || !currentSheetData) {
       return null;
     }
 
-    const { preview_insights } = dataPreview;
-
     return (
       <Card 
-        title={<><BulbOutlined /> 数据预览</>} 
+        title={
+          <Space>
+            <BulbOutlined style={{ color: '#1890ff' }} /> 
+            <span>数据预览</span>
+            <Tag color="blue">{currentSheetData.row_count} 行 × {currentSheetData.column_count} 列</Tag>
+          </Space>
+        } 
         style={{ marginBottom: 16 }}
       >
         {/* 数据概览信息 */}
-        <List
+        {dataPreview?.preview_insights && (
+          <>
+            <Divider orientation="left" plain>
+              <span>📋 数据概况</span>
+            </Divider>
+            <List
+              size="small"
+              dataSource={dataPreview.preview_insights.slice(0, 5) || []}
+              renderItem={item => (
+                <List.Item>
+                  <Text style={{ fontSize: '13px' }}>{item}</Text>
+                </List.Item>
+              )}
+              style={{ marginBottom: 16 }}
+            />
+          </>
+        )}
+        
+        {/* 前5行数据表格 */}
+        <Divider orientation="left" plain>
+          <Space>
+            <span>📊 前5行数据预览</span>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              共 {currentSheetData?.row_count || 0} 行数据
+            </Text>
+          </Space>
+        </Divider>
+        
+        <Table
+          columns={previewColumns}
+          dataSource={currentSheetData?.preview?.map((row, index) => ({ ...row, key: index })) || []}
+          pagination={false}
+          scroll={{ x: true }}
           size="small"
-          dataSource={preview_insights || []}
-          renderItem={item => (
-            <List.Item>
-              <Text>{item}</Text>
-            </List.Item>
-          )}
+          bordered
+          style={{ 
+            background: '#fafafa',
+            borderRadius: '6px'
+          }}
+          rowClassName={(_, index) => index % 2 === 0 ? 'even-row' : 'odd-row'}
         />
         
-        {/* 数据表格 */}
-        {currentSheetData && (
-          <div style={{ marginTop: 16 }}>
-            <Divider orientation="left" plain>
-              <Space>
-                <span>📊 数据表格</span>
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  显示前 5 行，共 {currentSheetData?.row_count || 0} 行数据
-                </Text>
-              </Space>
-            </Divider>
-            <Table
-              columns={previewColumns}
-              dataSource={currentSheetData?.preview?.map((row, index) => ({ ...row, key: index })) || []}
-              pagination={false}
-              scroll={{ x: true }}
-              size="small"
-              bordered
-              style={{ 
-                background: '#fafafa',
-                borderRadius: '6px'
-              }}
-              rowClassName={(_, index) => index % 2 === 0 ? 'even-row' : 'odd-row'}
-            />
-            <div style={{ 
-              marginTop: 12, 
-              padding: '8px 12px', 
-              background: '#f0f2f5', 
-              borderRadius: '4px',
-              fontSize: '12px',
-              color: '#666'
-            }}>
-              <Space split={<span>|</span>}>
-                <span>显示前 5 行，共 {currentSheetData?.row_count || 0} 行数据</span>
-                <span>共 {availableColumns.length} 列</span>
-                <span>数据类型已自动识别</span>
-              </Space>
-            </div>
-          </div>
-        )}
+        <div style={{ 
+          marginTop: 12, 
+          padding: '8px 12px', 
+          background: '#f0f2f5', 
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#666'
+        }}>
+          <Space split={<span>|</span>}>
+            <span>📊 显示前 5 行，共 {currentSheetData?.row_count || 0} 行数据</span>
+            <span>📋 共 {availableColumns.length} 列字段</span>
+            <span>🏷️ 数据类型已自动识别</span>
+          </Space>
+        </div>
       </Card>
     );
   };
@@ -886,9 +900,38 @@ const DataAnalysis = ({
 
       {analysisResult && !loading && (
         <>
-          {/* 已移除基础统计表格，直接展示有价值的分析结果和图表 */}
+          {/* 先展示可视化图表 */}
+          {analysisResult?.charts && analysisResult.charts.length > 0 && (
+            <Card 
+              title="📊 数据可视化分析"
+              style={{ marginBottom: 24 }}
+              extra={
+                <Tag color="blue">
+                  {analysisResult.analysis_type === 'excel_focused_analysis' ? 'Excel分析' :
+                   analysisResult.analysis_type === 'business_analysis' ? '商业分析' :
+                   analysisResult.analysis_type === 'comprehensive_gemini_analysis' ? 'Gemini分析' :
+                   '数据分析'}
+                </Tag>
+              }
+            >
+              <Row gutter={[16, 16]}>
+                {analysisResult.charts.map((chartData, index) => (
+                  <Col xs={24} lg={12} key={index}>
+                    <ChartDisplay chartData={chartData} />
+                    {chartData.subtitle && (
+                      <div style={{ padding: '8px 16px', background: '#f0f2f5', borderRadius: '4px', marginTop: '8px' }}>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          {chartData.subtitle}
+                        </Text>
+                      </div>
+                    )}
+                  </Col>
+                ))}
+              </Row>
+            </Card>
+          )}
 
-          {/* 综合分析报告 */}
+          {/* 然后展示关键发现（综合分析报告） */}
           <Card 
             title={
               <Space>
@@ -1064,189 +1107,20 @@ const DataAnalysis = ({
                     </Row>
                   )}
 
-                  <Row gutter={[16, 16]}>
-                    {/* 显示图表 */}
-                    {analysisResult?.charts && analysisResult.charts.length > 0 && (
-                      <>
-                        {analysisResult.charts.slice(0, 2).map((chartData, index) => (
-                          <Col xs={24} lg={12} key={index}>
-                            <ChartDisplay chartData={chartData} />
-                            {chartData.subtitle && (
-                              <div style={{ padding: '8px 16px', background: '#f0f2f5', borderRadius: '4px', marginTop: '8px' }}>
-                                <Text type="secondary" style={{ fontSize: '12px' }}>
-                                  {chartData.subtitle}
-                                </Text>
-                              </div>
-                            )}
-                          </Col>
-                        ))}
-                      </>
-                    )}
-                  </Row>
-
-                  {/* 专业洞察展示 */}
-                  {(analysisResult.business_insights || analysisResult.statistical_insights) && (
-                    <div style={{ marginTop: 16 }}>
-                      <Divider orientation="left">💡 专业洞察</Divider>
-                      <List
-                        size="small"
-                        dataSource={analysisResult.business_insights || analysisResult.statistical_insights || []}
-                        renderItem={item => (
-                          <List.Item>
-                            <Text>{item}</Text>
-                          </List.Item>
-                        )}
-                      />
-                    </div>
-                  )}
+                  {/* 移除了重复的专业洞察展示 */}
                 </Card>
               )}
 
-              {/* 次要分析结果 */}
-              {analysisResult?.secondary_analysis && (
-                <Card 
-                  title={`🔍 ${analysisResult.secondary_analysis.analysis_title || '次要分析'}`} 
-                  style={{ marginBottom: 24 }}
-                >
-                  <Row gutter={[16, 16]}>
-                    {/* 显示剩余的图表 */}
-                    {analysisResult?.charts && analysisResult.charts.length > 2 && (
-                      <>
-                        {analysisResult.charts.slice(2, 4).map((chartData, index) => (
-                          <Col xs={24} lg={12} key={index + 2}>
-                            <ChartDisplay chartData={chartData} />
-                            <div style={{ padding: '8px 16px', background: '#f6f6f6', borderRadius: '4px', marginTop: '8px' }}>
-                              <Text type="secondary" style={{ fontSize: '12px' }}>
-                                {getChartInsight(chartData, analysisResult, index + 2)}
-                              </Text>
-                            </div>
-                          </Col>
-                        ))}
-                      </>
-                    )}
-                    
-                    {/* 相关性分析特殊显示 */}
-                    {analysisResult.secondary_analysis.correlations && (
-                      <Col xs={24}>
-                        <Card size="small" title="字段相关性分析">
-                          <List
-                            size="small"
-                            dataSource={analysisResult.secondary_analysis.correlations}
-                            renderItem={(item) => (
-                              <List.Item>
-                                <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                                  <Text>{item.field1} ↔ {item.field2}</Text>
-                                  <Space>
-                                    <Text strong>{item.correlation?.toFixed(3)}</Text>
-                                    <Tag color={Math.abs(item.correlation) > 0.7 ? 'red' : Math.abs(item.correlation) > 0.3 ? 'orange' : 'blue'}>
-                                      {item.strength}
-                                    </Tag>
-                                  </Space>
-                                </Space>
-                              </List.Item>
-                            )}
-                          />
-                        </Card>
-                      </Col>
-                    )}
-                    
-                    {/* 其他次要分析结果 */}
-                    {!analysisResult.secondary_analysis.correlations && (
-                      <Col xs={24}>
-                        <div style={{ padding: '16px', background: '#fafafa', borderRadius: '6px' }}>
-                          <Text type="secondary">
-                            {analysisResult.secondary_analysis.analysis_title} 提供了补充性的分析视角
-                          </Text>
-                        </div>
-                      </Col>
-                    )}
-                  </Row>
-                </Card>
-              )}
-
-              {/* 战略建议展示 */}
-              {(analysisResult.strategic_recommendations || analysisResult.modeling_recommendations) && (
-                <Card title="🎯 专业建议" style={{ marginBottom: 24 }}>
-                  <List
-                    dataSource={analysisResult.strategic_recommendations || analysisResult.modeling_recommendations || []}
-                    renderItem={(item, index) => (
-                      <List.Item>
-                        <div style={{ width: '100%' }}>
-                          <Text strong style={{ color: '#1890ff' }}>建议 {index + 1}:</Text>
-                          <br />
-                          <Text>{item}</Text>
-                        </div>
-                      </List.Item>
-                    )}
-                  />
-                </Card>
-              )}
-
-              {/* 剩余图表展示 */}
-              {analysisResult?.charts && analysisResult.charts.length > 2 && (
-                <Card title="📈 补充分析图表" style={{ marginBottom: 24 }}>
-                  <Row gutter={[16, 16]}>
-                    {analysisResult.charts.slice(2).map((chartData, index) => (
-                      <Col xs={24} lg={12} key={index + 2}>
-                        <ChartDisplay chartData={chartData} />
-                        {chartData.subtitle && (
-                          <div style={{ padding: '8px 16px', background: '#f0f2f5', borderRadius: '4px', marginTop: '8px' }}>
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                              {chartData.subtitle}
-                            </Text>
-                          </div>
-                        )}
-                      </Col>
-                    ))}
-                  </Row>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* 可视化图表 - 嵌入到分析报告中 */}
-          {analysisResult?.charts && analysisResult.charts.length > 0 && (
-            <Card title={<><BarChartOutlined /> 数据可视化分析</>} style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 16 }}>
-                <Text type="secondary">
-                  以下图表直观展示了数据分析的关键发现，每个图表都对应分析报告中的具体洞察点：
-                </Text>
-              </div>
-              <Row gutter={[16, 16]}>
-                {analysisResult.charts.map((chartData, index) => (
-                  <Col xs={24} lg={12} key={index}>
-                    <div style={{ 
-                      border: '1px solid #f0f0f0', 
-                      borderRadius: '8px', 
-                      padding: '16px',
-                      background: '#fafafa',
-                      marginBottom: '16px'
-                    }}>
-                      <div style={{ marginBottom: '12px' }}>
-                        <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
-                          📈 {chartData.title}
-                        </Text>
-                      </div>
-                      <ChartDisplay chartData={chartData} />
-                      <div style={{ 
-                        marginTop: '12px', 
-                        padding: '8px 12px', 
-                        background: '#f6f6f6', 
-                        borderRadius: '4px',
-                        borderLeft: '4px solid #1890ff'
-                      }}>
-                        <Text type="secondary" style={{ fontSize: '13px' }}>
-                          <strong>图表解读：</strong>
-                          {chartData.subtitle || getChartInsight(chartData, analysisResult, index)}
-                        </Text>
-                      </div>
-                    </div>
-                  </Col>
-                ))}
-              </Row>
-            </Card>
-          )}
-
+            {/* 图表建议展示 */}
+            {analysisResult.chart_suggestions && (
+              <Card title="📈 Excel图表建议" style={{ marginBottom: 24 }}>
+                <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.8' }}>
+                  {analysisResult.chart_suggestions}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
 
         </>
       )}
