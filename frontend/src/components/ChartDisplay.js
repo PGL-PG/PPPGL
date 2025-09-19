@@ -10,10 +10,29 @@ const ChartDisplay = ({ chartData }) => {
     const chartTitle = title || `${column || '数据'} 图表`;
     const chartSubtitle = subtitle || '';
 
-    // 调试信息
-    console.log('ChartDisplay - 图表类型:', type);
-    console.log('ChartDisplay - 图表标题:', chartTitle);
-    console.log('ChartDisplay - 数据样本:', data?.slice(0, 3));
+
+    
+    // 数据验证
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      console.warn('ChartDisplay - 数据为空或无效');
+      return {
+        title: {
+          text: chartTitle,
+          subtext: '暂无数据',
+          left: 'center'
+        },
+        graphic: {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: '暂无数据',
+            fontSize: 16,
+            fill: '#999'
+          }
+        }
+      };
+    }
 
     switch (type) {
       case 'histogram':
@@ -225,15 +244,6 @@ const ChartDisplay = ({ chartData }) => {
         };
 
       case 'scatter':
-        console.log('=== 散点图调试信息 ===');
-        console.log('图表类型:', type);
-        console.log('数据类型:', typeof data);
-        console.log('数据是否为数组:', Array.isArray(data));
-        console.log('数据长度:', data?.length);
-        console.log('前3个数据点:', data?.slice(0, 3));
-        console.log('第一个数据点是否为数组:', Array.isArray(data?.[0]));
-        console.log('========================');
-        
         return {
           title: {
             text: chartTitle,

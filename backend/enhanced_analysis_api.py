@@ -275,6 +275,7 @@ class EnhancedAnalysisAPI:
         charts = []
         
         try:
+
             # 解析AI返回的可视化建议
             viz_suggestions = self._parse_visualization_suggestions(ai_insights)
             
@@ -331,55 +332,88 @@ class EnhancedAnalysisAPI:
             for line in lines:
                 line = line.strip()
                 
-                # 检测图表标题
-                if line.startswith('###') and ('：' in line or ':' in line):
+                # 检测图表标题 - 支持多种格式
+                if line.startswith('###'):
                     if current_chart:
                         suggestions.append(current_chart)
                     
-                    # 解析图表信息
+                    # 解析图表信息 - 支持 "### 图表1：[类型] - [标题]" 格式
                     title_part = line.replace('###', '').strip()
-                    separator = '：' if '：' in title_part else ':'
                     
-                    if separator in title_part:
+                    # 处理 "图表1：柱状图 - 品牌销量排行" 格式
+                    if '：' in title_part and '-' in title_part:
+                        parts = title_part.split('：', 1)
+                        if len(parts) >= 2:
+                            chart_num = parts[0].strip()  # "图表1"
+                            type_title = parts[1].strip()  # "柱状图 - 品牌销量排行"
+                            
+                            if '-' in type_title:
+                                type_part, title_part = type_title.split('-', 1)
+                                chart_info = type_part.strip()  # "柱状图"
+                                title = title_part.strip()     # "品牌销量排行"
+                            else:
+                                chart_info = type_title
+                                title = f"图表{len(suggestions) + 1}"
+                    
+                    # 处理 "### 柱状图：品牌销量排行" 格式（原格式）
+                    elif ('：' in title_part or ':' in title_part):
+                        separator = '：' if '：' in title_part else ':'
                         chart_type_title = title_part.split(separator, 1)
                         if len(chart_type_title) >= 2:
                             chart_info = chart_type_title[0].strip()
                             title = chart_type_title[1].strip()
-                            
-                            # 提取图表类型
-                            chart_type = self._extract_chart_type(chart_info)
-                            
-                            current_chart = {
-                                'type': chart_type,
-                                'title': title,
-                                'dimension_field': None,
-                                'measure_field': None,
-                                'reason': '',
-                                'expected_insight': ''
-                            }
-                
-                # 解析字段信息
-                elif current_chart and ('维度字段' in line or '度量字段' in line):
-                    if '维度字段' in line:
-                        field_info = line.split('：', 1) if '：' in line else line.split(':', 1)
-                        if len(field_info) >= 2:
-                            current_chart['dimension_field'] = field_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                        else:
+                            chart_info = title_part
+                            title = f"图表{len(suggestions) + 1}"
+                    else:
+                        # 如果没有分隔符，尝试从整行提取
+                        chart_info = title_part
+                        title = f"图表{len(suggestions) + 1}"
                     
-                    elif '度量字段' in line:
-                        field_info = line.split('：', 1) if '：' in line else line.split(':', 1)
-                        if len(field_info) >= 2:
-                            current_chart['measure_field'] = field_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
-                
-                elif current_chart and ('推荐理由' in line or '预期洞察' in line):
-                    if '推荐理由' in line:
-                        reason_info = line.split('：', 1) if '：' in line else line.split(':', 1)
-                        if len(reason_info) >= 2:
-                            current_chart['reason'] = reason_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                    # 提取图表类型
+                    chart_type = self._extract_chart_type(chart_info)
                     
-                    elif '预期洞察' in line:
-                        insight_info = line.split('：', 1) if '：' in line else line.split(':', 1)
+                    current_chart = {
+                        'type': chart_type,
+                        'title': title,
+                        'dimension_field': None,
+                        'measure_field': None,
+                        'reason': '',
+                        'expected_insight': ''
+                    }
+                
+                # 解析字段信息 - 支持多种格式
+                elif current_chart and ('维度字段' in line or '度量字段' in line or '分析目标' in line or '预期洞察' in line or '图表说明' in line):
+                    # 清理行内容，移除markdown格式
+                    clean_line = line.replace('- **', '').replace('**', '').replace('-', '').strip()
+                    
+                    if '维度字段' in clean_line:
+                        field_info = clean_line.split('：', 1) if '：' in clean_line else clean_line.split(':', 1)
+                        if len(field_info) >= 2:
+                            field_value = field_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                            # 如果有多个字段，取第一个
+                            if ',' in field_value:
+                                field_value = field_value.split(',')[0].strip()
+                            current_chart['dimension_field'] = field_value
+                    
+                    elif '度量字段' in clean_line:
+                        field_info = clean_line.split('：', 1) if '：' in clean_line else clean_line.split(':', 1)
+                        if len(field_info) >= 2:
+                            field_value = field_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                            # 如果有多个字段，取第一个
+                            if ',' in field_value:
+                                field_value = field_value.split(',')[0].strip()
+                            current_chart['measure_field'] = field_value
+                    
+                    elif '预期洞察' in clean_line:
+                        insight_info = clean_line.split('：', 1) if '：' in clean_line else clean_line.split(':', 1)
                         if len(insight_info) >= 2:
                             current_chart['expected_insight'] = insight_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
+                    
+                    elif '图表说明' in clean_line:
+                        reason_info = clean_line.split('：', 1) if '：' in clean_line else clean_line.split(':', 1)
+                        if len(reason_info) >= 2:
+                            current_chart['reason'] = reason_info[1].strip().replace('[', '').replace(']', '').replace('**', '')
             
             # 添加最后一个图表
             if current_chart:
@@ -416,14 +450,20 @@ class EnhancedAnalysisAPI:
             measure_field = suggestion.get('measure_field')
             expected_insight = suggestion.get('expected_insight', '')
             
-            # 验证字段存在
-            if dimension_field and dimension_field not in df.columns:
-                print(f"维度字段 {dimension_field} 不存在")
-                return {}
+
             
-            if measure_field and measure_field not in df.columns:
-                print(f"度量字段 {measure_field} 不存在")
-                return {}
+            # 验证和修正字段名
+            if dimension_field:
+                dimension_field = self._find_best_matching_column(df, dimension_field)
+                if not dimension_field:
+                    print(f"无法找到匹配的维度字段")
+                    return None
+            
+            if measure_field:
+                measure_field = self._find_best_matching_column(df, measure_field)
+                if not measure_field:
+                    print(f"无法找到匹配的度量字段")
+                    return None
             
             chart_data = []
             subtitle = expected_insight
@@ -507,7 +547,8 @@ class EnhancedAnalysisAPI:
                     'type': 'bar',
                     'title': f'{cat_field} {num_field} 排行榜',
                     'data': chart_data,
-                    'subtitle': f'显示 {cat_field} 在 {num_field} 上的表现排名'
+                    'subtitle': f'显示 {cat_field} 在 {num_field} 上的表现排名',
+                    'ai_driven': False  # 标记这是默认逻辑生成的
                 })
             
             # 图表2：分布图（如果有分类字段）
@@ -525,7 +566,8 @@ class EnhancedAnalysisAPI:
                     'type': 'pie',
                     'title': f'{cat_field} 分布情况',
                     'data': chart_data,
-                    'subtitle': f'{cat_field} 的分布情况，{value_counts.index[0]} 占比最高'
+                    'subtitle': f'{cat_field} 的分布情况，{value_counts.index[0]} 占比最高',
+                    'ai_driven': False  # 标记这是默认逻辑生成的
                 })
             
             # 图表3：相关性分析（如果有多个数值字段）
@@ -543,7 +585,10 @@ class EnhancedAnalysisAPI:
                         'type': 'scatter',
                         'title': f'{field1} vs {field2} 相关性',
                         'data': chart_data,
-                        'subtitle': f'相关系数: {correlation:.3f}'
+                        'subtitle': f'相关系数: {correlation:.3f}',
+                        'xLabel': field1,
+                        'yLabel': field2,
+                        'ai_driven': False  # 标记这是默认逻辑生成的
                     })
             
         except Exception as e:
@@ -557,6 +602,30 @@ class EnhancedAnalysisAPI:
             })
         
         return charts
+    
+    def _find_best_matching_column(self, df: pd.DataFrame, target_field: str) -> str:
+        """查找最匹配的列名"""
+        if not target_field:
+            return None
+            
+        # 直接匹配
+        if target_field in df.columns:
+            return target_field
+        
+        # 模糊匹配（忽略大小写和空格）
+        target_lower = target_field.lower().replace(' ', '').replace('_', '')
+        
+        for col in df.columns:
+            col_lower = str(col).lower().replace(' ', '').replace('_', '')
+            if target_lower == col_lower:
+                return col
+        
+        # 部分匹配
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if target_lower in col_lower or col_lower in target_lower:
+                return col
+        return None
     
     def _get_missing_data_info(self, df: pd.DataFrame) -> dict:
         """获取缺失数据信息"""
