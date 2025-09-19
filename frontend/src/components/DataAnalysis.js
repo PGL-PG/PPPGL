@@ -1018,6 +1018,11 @@ const DataAnalysis = ({
                                 默认分析
                               </Tag>
                             )}
+                            {chartData.sql_powered && (
+                              <Tag color="green" size="small" style={{ fontWeight: 'bold' }}>
+                                🚀 SQL增强分析
+                              </Tag>
+                            )}
                             {chartData.multidimensional && (
                               <Tag color="orange" size="small">
                                 🔗 多维度
@@ -1044,6 +1049,32 @@ const DataAnalysis = ({
                             <Text type="secondary">
                               📊 {chartData.subtitle}
                             </Text>
+                          </div>
+                        )}
+                        {chartData.sql_powered && chartData.sql_query && (
+                          <div style={{
+                            padding: '8px 16px',
+                            background: '#f0f9ff',
+                            borderTop: '1px solid #e6f7ff',
+                            fontSize: '11px',
+                            color: '#1890ff'
+                          }}>
+                            <details>
+                              <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                                🔍 查看SQL查询
+                              </summary>
+                              <pre style={{ 
+                                marginTop: '8px', 
+                                padding: '8px', 
+                                background: '#fff', 
+                                border: '1px solid #d9d9d9',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                overflow: 'auto'
+                              }}>
+                                {chartData.sql_query}
+                              </pre>
+                            </details>
                           </div>
                         )}
                       </div>

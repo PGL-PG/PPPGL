@@ -244,7 +244,6 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    print("🚀 启动Excel智能分析系统...")
-    print("📊 集成场景匹配和智能提示词功能")
-    print("🌐 服务地址: http://localhost:8000")
+    print("启动Excel智能分析系统...")
+    print("服务地址: http://localhost:8000")
     app.run(debug=True, port=8000)

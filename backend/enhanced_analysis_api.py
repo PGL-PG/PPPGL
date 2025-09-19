@@ -12,6 +12,7 @@ import requests
 # 导入智能分析系统
 from intelligent_scenario_matcher import ScenarioMatcher
 from scenario_prompt_engine import ScenarioPromptEngine
+from sql_generator import SQLBasedAnalysisEngine
 
 # 定义数据转换函数
 def safe_convert_value(value):
@@ -71,6 +72,7 @@ class EnhancedAnalysisAPI:
     def __init__(self):
         self.scenario_matcher = ScenarioMatcher()
         self.prompt_engine = ScenarioPromptEngine()
+        self.sql_engine = SQLBasedAnalysisEngine()
         self.api_key = "AIzaSyBQkCLkovABnjZeOVRV-FoxkFPkayvNXVQ"
         self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         
@@ -78,11 +80,8 @@ class EnhancedAnalysisAPI:
         """增强版数据分析流程"""
         
         try:
-            print(f"开始分析数据: {len(df)}行 x {len(df.columns)}列")
-            
             # 1. 智能场景匹配
             best_scenario, confidence, match_details = self.scenario_matcher.match_best_scenario(df)
-            print(f"场景匹配结果: {best_scenario} (置信度: {confidence:.3f})")
             
             # 2. 生成场景化提示词
             enhanced_prompt = self.prompt_engine.generate_scenario_prompt(
@@ -95,8 +94,6 @@ class EnhancedAnalysisAPI:
             # 3. 添加可视化提示词补充
             viz_supplement = self.prompt_engine.create_visualization_prompt_supplement(df, best_scenario)
             final_prompt = enhanced_prompt + viz_supplement
-            
-            print(f"生成提示词长度: {len(final_prompt)} 字符")
             
             # 4. 调用Gemini进行智能分析
             ai_insights = ""
@@ -116,9 +113,7 @@ class EnhancedAnalysisAPI:
                     result = response.json()
                     ai_insights = result["candidates"][0]["content"]["parts"][0]["text"]
                     ai_called = True
-                    print(f"Gemini分析成功，返回内容长度: {len(ai_insights)} 字符")
                 except Exception as e:
-                    print(f"Gemini API调用失败: {e}")
                     ai_insights = f"AI分析服务暂时不可用: {str(e)}"
             else:
                 ai_insights = "API密钥未配置，使用本地分析"
@@ -281,24 +276,30 @@ class EnhancedAnalysisAPI:
             
             if not viz_suggestions:
                 # 如果AI没有返回结构化的建议，使用默认逻辑
-                print("未发现AI可视化建议，使用默认逻辑")
                 return self._generate_charts(df, scenario)
             
-            print(f"解析到{len(viz_suggestions)}个可视化建议")
-            
-            # 根据AI建议生成图表
+            # 根据AI建议生成图表 - 使用SQL增强分析
             for i, suggestion in enumerate(viz_suggestions[:4]):  # 最多4个图表
+                # 🚀 优先使用SQL增强分析 - 确保高质量可视化
+                sql_chart = None
+                try:
+                    sql_chart = self.sql_engine.generate_enhanced_chart_data(suggestion, df)
+                    if sql_chart and sql_chart.get('data') and len(sql_chart.get('data', [])) > 0:
+                        charts.append(sql_chart)
+                        continue
+                except Exception as e:
+                    pass
+                
+                # SQL失败时使用基础方法兜底
                 chart = self._create_chart_from_suggestion(df, suggestion, i)
-                if chart:
+                if chart and chart.get('data'):
                     charts.append(chart)
             
             # 如果没有成功生成任何图表，使用默认逻辑
             if not charts:
-                print("没有成功生成AI建议图表，使用默认逻辑")
                 return self._generate_charts(df, scenario)
                 
         except Exception as e:
-            print(f"解析AI可视化建议失败: {e}")
             # 如果解析失败，使用默认逻辑
             return self._generate_charts(df, scenario)
         
@@ -420,7 +421,7 @@ class EnhancedAnalysisAPI:
                 suggestions.append(current_chart)
             
         except Exception as e:
-            print(f"解析可视化建议失败: {e}")
+            pass
         
         return suggestions
     
@@ -511,7 +512,6 @@ class EnhancedAnalysisAPI:
             
             # 如果没有生成数据，返回空
             if not chart_data:
-                print(f"图表 {title} 没有生成数据")
                 return None
             
             return {
@@ -523,7 +523,6 @@ class EnhancedAnalysisAPI:
             }
             
         except Exception as e:
-            print(f"创建图表失败: {e}")
             return None
     
     def _generate_charts(self, df: pd.DataFrame, scenario: str) -> list:
@@ -592,7 +591,6 @@ class EnhancedAnalysisAPI:
                     })
             
         except Exception as e:
-            print(f"图表生成出错: {e}")
             # 生成默认图表
             charts.append({
                 'type': 'bar',

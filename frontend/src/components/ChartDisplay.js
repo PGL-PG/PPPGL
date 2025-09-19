@@ -14,7 +14,6 @@ const ChartDisplay = ({ chartData }) => {
     
     // 数据验证
     if (!data || (Array.isArray(data) && data.length === 0)) {
-      console.warn('ChartDisplay - 数据为空或无效');
       return {
         title: {
           text: chartTitle,
@@ -194,7 +193,15 @@ const ChartDisplay = ({ chartData }) => {
             },
             formatter: function(params) {
               const param = params[0];
-              return `${param.name}<br/>${param.seriesName}: ${param.value?.toLocaleString() || param.value}`;
+              const dataItem = data.find(item => item.name === param.name);
+              let tooltip = `${param.name}<br/>${param.seriesName}: ${param.value?.toLocaleString() || param.value}`;
+              
+              // 🚀 SQL增强：显示额外的分析信息
+              if (dataItem && dataItem.extra_info) {
+                tooltip += `<br/><span style="color: #1890ff;">${dataItem.extra_info}</span>`;
+              }
+              
+              return tooltip;
             }
           },
           grid: {
