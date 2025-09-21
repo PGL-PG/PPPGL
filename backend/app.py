@@ -8,7 +8,11 @@ import json
 import os
 import pandas as pd
 import numpy as np
+import warnings
 from werkzeug.utils import secure_filename
+
+# 抑制pandas警告
+warnings.filterwarnings('ignore', category=UserWarning, module='pandas')
 
 # 导入我们的智能分析系统
 from enhanced_analysis_api import enhanced_analyze_data
@@ -229,9 +233,6 @@ def analyze_data():
         return jsonify(result)
         
     except Exception as e:
-        import traceback
-        print(f"分析失败详细错误: {str(e)}")
-        print(f"错误堆栈: {traceback.format_exc()}")
         return jsonify({'error': f'分析失败: {str(e)}'}), 500
 
 @app.route('/api/health', methods=['GET'])

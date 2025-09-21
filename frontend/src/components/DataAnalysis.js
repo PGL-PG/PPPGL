@@ -20,7 +20,8 @@ import {
   Collapse,
   Tabs,
   Dropdown,
-  Popconfirm
+  Popconfirm,
+  Switch
 } from 'antd';
 import {
   FundOutlined,
@@ -72,6 +73,69 @@ const customStyles = `
     padding-left: 16px;
     margin: 16px 0;
   }
+  
+  /* 深色模式全局样式 - 这段是新增的 */
+  body.dark-mode {
+    background-color: #141414;
+    color: #e0e0e0;
+  }
+  
+  body.dark-mode .ant-card {
+    background-color: #1f1f1f;
+    border-color: #333;
+    color: #e0e0e0;
+  }
+  
+  body.dark-mode .ant-card-head {
+    background: linear-gradient(90deg, #2d2d2d 0%, #1f1f1f 100%);
+    border-bottom-color: #333;
+  }
+  
+  body.dark-mode .ant-card-head-title {
+    color: #e0e0e0;
+  }
+  
+  body.dark-mode .ant-input,
+  body.dark-mode .ant-select-selector,
+  body.dark-mode .ant-select-dropdown {
+    background-color: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+  }
+  
+  body.dark-mode .ant-input::placeholder,
+  body.dark-mode .ant-select-selection-placeholder {
+    color: #aaa;
+  }
+  
+  body.dark-mode .ant-divider {
+    background-color: #333;
+  }
+  
+  body.dark-mode .ant-table {
+    background-color: #1f1f1f;
+    color: #e0e0e0;
+  }
+  
+  body.dark-mode .ant-table-thead > tr > th {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-bottom-color: #444;
+  }
+  
+  body.dark-mode .ant-table-tbody > tr > td {
+    border-bottom-color: #333;
+  }
+  
+  body.dark-mode .ant-tag {
+    background-color: #444;
+    color: #e0e0e0;
+  }
+  
+  body.dark-mode .ant-alert-info {
+    background-color: rgba(24, 144, 255, 0.1);
+    border-color: rgba(24, 144, 255, 0.3);
+  }
 `;
 
 // 添加样式到文档
@@ -104,6 +168,7 @@ const DataAnalysis = ({
   const [analysisResult, setAnalysisResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedFieldSummary, setExpandedFieldSummary] = useState(false);
+  const [darkMode, setDarkMode] = useState(false); // 添加深色模式状态
 
   // 解析分析洞察为结构化内容（过滤可视化建议部分）
   const parseAnalysisInsights = (analysisText) => {
@@ -623,14 +688,35 @@ const DataAnalysis = ({
                 ))}
               </div>
             </div>
-            <Button
-              type="primary"
-              icon={<FileExcelOutlined />}
-              onClick={onShowUpload}
-              size="small"
-            >
-              上传新文件
-            </Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* 深色模式开关 */}
+              <Space style={{ color: darkMode ? '#e0e0e0' : '#333' }}>
+                <span>深色模式</span>
+                <Switch 
+                  checked={darkMode} 
+                  onChange={(checked) => {
+                    setDarkMode(checked);
+                    // 应用全局深色模式
+                    if (checked) {
+                      document.body.classList.add('dark-mode');
+                    } else {
+                      document.body.classList.remove('dark-mode');
+                    }
+                  }} 
+                  checkedChildren="开" 
+                  unCheckedChildren="关" 
+                />
+              </Space>
+              {/* 上传新文件按钮 */}
+              <Button
+                type="primary"
+                icon={<FileExcelOutlined />}
+                onClick={onShowUpload}
+                size="small"
+              >
+                上传新文件
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -821,15 +907,18 @@ const DataAnalysis = ({
       {/* 0. 固定的文件管理区域 */}
       {renderFileManagement()}
 
-      <div className={`analysis-container ${uploadedFiles && uploadedFiles.length > 1 ? 'content-with-fixed-management' : ''}`}>
+      <div className={`analysis-container ${uploadedFiles && uploadedFiles.length > 1 ? 'content-with-fixed-management' : ''} ${darkMode ? 'dark-mode' : ''}`}>
         {/* 1. 数据预览 */}
         {renderDataPreview()}
 
         {/* 2. 分析建议 */}
         {renderAnalysisSuggestions()}
 
-        {/* 3. 分析配置 */}
-        <Card title="📋 分析配置" style={{ marginBottom: 24 }}>
+        {/* 分析配置 */}
+        <Card 
+          title="📋 分析配置" 
+          style={{ marginBottom: 24 }}
+        >
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={12} md={8}>
               <Text strong>选择工作表：</Text>
@@ -1009,7 +1098,7 @@ const DataAnalysis = ({
                         }}>
                           <Text strong style={{ color: '#1890ff' }}>{chartData.title}</Text>
                           <Space>
-                            {chartData.ai_driven ? (
+                            {/* {chartData.ai_driven ? (
                               <Tag color="purple" size="small">
                                 <BulbOutlined /> AI建议
                               </Tag>
@@ -1017,8 +1106,8 @@ const DataAnalysis = ({
                               <Tag color="default" size="small">
                                 默认分析
                               </Tag>
-                            )}
-                            {chartData.sql_powered && (
+                            )} */}
+                            {/* {chartData.sql_powered && (
                               <Tag color="green" size="small" style={{ fontWeight: 'bold' }}>
                                 🚀 SQL增强分析
                               </Tag>
@@ -1032,7 +1121,7 @@ const DataAnalysis = ({
                               <Tag color="green" size="small">
                                 {chartData.dimension_count}个维度
                               </Tag>
-                            )}
+                            )} */}
                           </Space>
                         </div>
                         <div style={{ padding: '16px' }}>
@@ -1144,30 +1233,54 @@ const DataAnalysis = ({
                         bodyStyle={{ padding: '16px 20px' }}
                       >
                         <div style={{ lineHeight: '1.8' }}>
-                          {section.content.map((item, itemIndex) => (
-                            <div
-                              key={itemIndex}
-                              style={{
-                                marginBottom: '12px',
-                                padding: '8px 0',
-                                borderBottom: itemIndex < section.content.length - 1 ? '1px dashed #f0f0f0' : 'none',
-                                fontSize: '14px'
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                                <span style={{
-                                  color: '#1890ff',
-                                  marginRight: '8px',
-                                  fontSize: '16px',
-                                  marginTop: '2px',
-                                  minWidth: '16px'
-                                }}>▶</span>
-                                <div style={{ flex: 1, color: '#2c3e50' }}>
-                                  {formatContentText(item)}
+                          {section.content.map((item, itemIndex) => {
+                            const colors = [
+                              '#1890ff', '#52c41a', '#faad14', '#f5222d',
+                              '#722ed1', '#13c2c2', '#fa8c16', '#eb2f96'
+                            ];
+                            const color = colors[itemIndex % colors.length];
+                             
+                            return (
+                              <div
+                                key={itemIndex}
+                                style={{
+                                  marginBottom: '12px',
+                                  padding: '12px 16px', // 增加内边距
+                                  borderBottom: itemIndex < section.content.length - 1 ? '1px dashed #f0f0f0' : 'none',
+                                  fontSize: '14px',
+                                  transition: 'all 0.2s ease', // 应用到所有属性
+                                  cursor: 'pointer',
+                                  borderRadius: '6px', // 添加圆角
+                                  backgroundColor: 'transparent' // 初始透明背景
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1.01) translateX(4px)'; // 轻微放大并右移
+                                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)'; // 添加柔和阴影
+                                  e.currentTarget.style.backgroundColor = 'rgba(240, 249, 255, 0.7)'; // 浅蓝色背景
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1) translateX(0)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                                  <span style={{
+                                    marginRight: '12px',
+                                    width: '3px',
+                                    height: '100%',
+                                    minHeight: '24px',
+                                    backgroundColor: color,
+                                    borderRadius: '1.5px',
+                                    boxShadow: `0 0 8px ${color}60` // 增强阴影效果
+                                  }}></span>
+                                  <div style={{ flex: 1, color: '#2c3e50', fontWeight: '450' }}>
+                                    {formatContentText(item)}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </Card>
                     ));
@@ -1268,7 +1381,12 @@ const DataAnalysis = ({
                   </Card>
                 )}
 
-                {/* 图表建议已转换为实际ECharts图表，不再显示文本建议 */}
+                {/* 深色模式支持 */}
+                <div style={{ position: 'relative' }}>
+                  <div className={darkMode ? 'dark-mode' : ''}>
+                    {/* 图表建议已转换为实际ECharts图表，不再显示文本建议 */}
+                  </div>
+                </div>
               </div>
             )}
 

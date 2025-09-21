@@ -15,37 +15,281 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* 浅色模式背景 - 从白色改为浅蓝色 */
 .main-container {
   padding: 24px;
-  background: #f5f5f5;
+  background: #e6f7ff; /* 浅蓝色背景 - 保持全宽度 */
   margin-top: 64px; /* Header高度补偿 */
 }
 
-/* 固定的文件管理区域 */
-.fixed-file-management {
-  position: fixed;
-  top: 64px; /* Header下方 */
-  left: 0;
-  right: 0;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-  z-index: 999;
-  padding: 12px 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+/* 创建一个内容包装器来限制内容区域的宽度 */
+.content-wrapper {
+  max-width: 1200px; /* 限制内容区域的最大宽度 */
+  margin: 0 auto; /* 水平居中 */
 }
 
-/* 内容区域需要额外的顶部边距 */
-.content-with-fixed-management {
-  margin-top: 80px; /* 根据文件管理区域高度调整 */
+/* 深色模式全局样式 - 统一使用VS Code风格的舒适深灰色 */
+.dark-mode {
+  background-color: #252526; /* VS Code风格的深灰色，略带暖调 */
+  color: #d4d4d4;
 }
 
-.upload-container {
+.dark-mode body {
+  background-color: #252526;
+  color: #d4d4d4;
+}
+
+/* 确保布局颜色在深色模式下正确 - 关键修改！ */
+.dark-mode .main-container {
+  background-color: #252526; /* 深色模式背景 - 保持全宽度 */
+}
+
+.dark-mode .ant-card {
+  background-color: #2d2d30;
+  border-color: #3e3e42;
+  color: #d4d4d4;
+}
+
+.dark-mode .ant-card-head {
+  background: linear-gradient(90deg, #2d2d30 0%, #252526 100%);
+  border-bottom-color: #3e3e42;
+}
+
+.dark-mode .ant-card-head-title {
+  color: #d4d4d4;
+}
+
+.dark-mode .ant-input,
+.dark-mode .ant-select-selector,
+.dark-mode .ant-select-dropdown {
+  background-color: #3c3c3c;
+  border-color: #444;
+  color: #d4d4d4;
+}
+
+.dark-mode .ant-input::placeholder,
+.dark-mode .ant-select-selection-placeholder {
+  color: #aaa;
+}
+
+.dark-mode .ant-divider {
+  background-color: #3e3e42;
+}
+
+.dark-mode .ant-table {
+  background-color: #2d2d30;
+  color: #d4d4d4;
+}
+
+.dark-mode .ant-table-thead > tr > th {
+  background-color: #3c3c3c;
+  color: #d4d4d4;
+  border-bottom-color: #444;
+}
+
+.dark-mode .ant-table-tbody > tr > td {
+  border-bottom-color: #3e3e42;
+}
+
+.dark-mode .ant-tag {
+  background-color: #444;
+  color: #d4d4d4;
+}
+
+.dark-mode .ant-alert-info {
+  background-color: rgba(24, 144, 255, 0.1);
+  border-color: rgba(24, 144, 255, 0.3);
+}
+
+/* 确保布局颜色在深色模式下正确 - 关键修改！ */
+.dark-mode .main-container {
+  background-color: #252526; /* 改为舒适的深灰色 */
+}
+
+.dark-mode .header {
+  background: linear-gradient(135deg, #3a3a3a 0%, #4a3a6a 100%);
+}
+
+.dark-mode .fixed-file-management {
+  background: #2d2d30;
+  border-bottom: 1px solid #3e3e42;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 深色模式下的上传组件样式 - 关键修改！ */
+.dark-mode .upload-card {
+  background-color: #2d2d30;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .upload-dragger {
+  background: linear-gradient(120deg, rgba(24, 144, 255, 0.02), rgba(24, 144, 255, 0.04), rgba(24, 144, 255, 0.02)) !important;
+}
+
+.dark-mode .upload-dragger:hover {
+  background-color: rgba(24, 144, 255, 0.1) !important;
+  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.2) !important;
+}
+
+.dark-mode .excel-icon-container::after {
+  background: rgba(24, 144, 255, 0.05);
+}
+
+/* 上传进度条容器样式 */
+.upload-progress-container {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(24, 144, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(24, 144, 255, 0.1);
+}
+
+/* 进度条背景 */
+.upload-progress-bar {
+  height: 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 进度条填充部分 - 带有颜色渐变 */
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #40a9ff 0%, #1890ff 100%);
+  border-radius: 6px;
+  transition: width 0.4s ease-out;
+  box-shadow: 0 0 10px rgba(24, 144, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 进度条上的闪光效果 */
+.upload-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shine 2s infinite;
+}
+
+/* 进度文本样式 */
+.upload-progress-text {
+  color: #1890ff;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  display: block;
+}
+
+/* 深色模式下的上传进度样式 */
+.dark-mode .upload-progress-container {
+  background: rgba(24, 144, 255, 0.03);
+  border: 1px solid rgba(24, 144, 255, 0.08);
+}
+
+.dark-mode .upload-progress-bar {
+  background: #2d2d2d;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .upload-progress-fill {
+  background: linear-gradient(90deg, #1976d2 0%, #1565c0 100%);
+  box-shadow: 0 0 10px rgba(24, 144, 255, 0.2);
+}
+
+.dark-mode .upload-progress-text {
+  color: #69c0ff;
+}
+
+/* 进度条闪光动画 */
+@keyframes shine {
+  0% {
+    left: -100%;
+  }
+  20% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* 欢迎语样式和动画效果 */
+.welcome-section {
+  text-align: center;
+  margin-bottom: 32px;
+  animation: fadeInUp 1s ease-out;
+}
+
+.welcome-title {
+  margin-bottom: 16px !important;
+  position: relative;
+  display: inline-block;
+}
+
+.welcome-title::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  animation: slideIn 0.8s ease-out 0.3s both;
+}
+
+.welcome-description {
+  color: #666;
+  font-size: 16px;
+  line-height: 1.6;
   max-width: 800px;
-  margin: 0 auto;
-  padding: 40px 0;
+  margin: 0 auto !important;
+  opacity: 0;
+  animation: fadeIn 0.8s ease-out 0.6s both;
 }
 
-.analysis-container {
-  max-width: 1200px;
-  margin: 0 auto;
+/* 深色模式下的欢迎语样式 */
+.dark-mode .welcome-description {
+  color: #aaa;
+}
+
+.dark-mode .welcome-title::after {
+  background: linear-gradient(90deg, #4a90e2, #9013fe);
+}
+
+/* 动画效果定义 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    width: 0;
+  }
+  to {
+    width: 80px;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

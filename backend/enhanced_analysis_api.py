@@ -50,7 +50,7 @@ def detect_data_type(series):
     
     # 尝试转换为日期时间
     try:
-        pd.to_datetime(non_null_series.head(10))
+        pd.to_datetime(non_null_series.head(10), errors='coerce', infer_datetime_format=True)
         return 'datetime'
     except:
         pass
@@ -155,9 +155,7 @@ class EnhancedAnalysisAPI:
             return self._sanitize_for_json(result)
             
         except Exception as e:
-            print(f"分析过程出错: {e}")
-            import traceback
-            traceback.print_exc()
+            pass
             return {
                 "status": "error",
                 "error": str(e),
@@ -457,13 +455,11 @@ class EnhancedAnalysisAPI:
             if dimension_field:
                 dimension_field = self._find_best_matching_column(df, dimension_field)
                 if not dimension_field:
-                    print(f"无法找到匹配的维度字段")
                     return None
             
             if measure_field:
                 measure_field = self._find_best_matching_column(df, measure_field)
                 if not measure_field:
-                    print(f"无法找到匹配的度量字段")
                     return None
             
             chart_data = []
@@ -714,7 +710,6 @@ class EnhancedAnalysisAPI:
             return filtered_content.strip()
             
         except Exception as e:
-            print(f"过滤可视化建议失败: {e}")
             return ai_insights
 
     def _sanitize_for_json(self, obj):
